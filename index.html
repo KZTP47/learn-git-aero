@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en" data-theme="day">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Learn Git Aero</title>
+    <meta
+      name="description"
+      content="Learn git branching by playing. Run real commands in a terminal and watch a live commit graph react, one small lesson at a time."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#8fdcfa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#103d5b" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="assets/favicon.svg" />
+    <link rel="stylesheet" href="css/tokens.css" />
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/aero.css" />
+    <link rel="stylesheet" href="css/tree.css" />
+    <link rel="stylesheet" href="css/terminal.css" />
+    <link rel="stylesheet" href="css/modals.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#workspace">Skip to the workspace</a>
+
+    <div id="app">
+      <div id="aero-bg" aria-hidden="true">
+        <div class="aero-layer aero-bloom"></div>
+        <div class="aero-layer aero-rays"></div>
+        <div class="aero-layer aero-surface"></div>
+        <div class="aero-layer aero-leaf"></div>
+        <div class="aero-layer aero-caustic"></div>
+        <div class="aero-layer aero-bokeh">
+          <span class="orb orb-1"></span>
+          <span class="orb orb-2"></span>
+          <span class="orb orb-3"></span>
+          <span class="orb orb-4"></span>
+          <span class="orb orb-5"></span>
+          <span class="orb orb-6"></span>
+        </div>
+        <div class="aero-layer aero-bubbles">
+          <span class="bubble b1"></span>
+          <span class="bubble b2"></span>
+          <span class="bubble b3"></span>
+          <span class="bubble b4"></span>
+          <span class="bubble b5"></span>
+          <span class="bubble b6"></span>
+          <span class="bubble b7"></span>
+          <span class="bubble b8"></span>
+          <span class="bubble b9"></span>
+          <span class="bubble b10"></span>
+          <span class="bubble b11"></span>
+          <span class="bubble b12"></span>
+        </div>
+        <div class="aero-layer aero-scrim"></div>
+        <div class="aero-layer aero-vignette"></div>
+      </div>
+
+      <header id="topbar">
+        <div id="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg class="icon" focusable="false"><use href="assets/icons.svg#icon-git-branch" /></svg>
+          </span>
+          <span class="brand-word">Learn Git Aero</span>
+        </div>
+
+        <!-- The progress badge leads the title block. It used to follow it, and
+             a long level name would then eat the whole column and strand the
+             badge against the action rail, where it read as another control. -->
+        <div class="topbar-titles">
+          <p id="level-progress"></p>
+          <div class="title-stack">
+            <h1 id="level-title"></h1>
+          </div>
+        </div>
+
+        <!-- Each control is wrapped in a .tip span and the bubble is drawn from
+             the WRAPPER's ::after, never the button's. Two reasons, both hard:
+             .btn clips itself with overflow:hidden to hold its gloss and light
+             sweep inside the capsule, and the sweep is already .btn::after. A
+             bubble on the button is therefore both clipped away and fighting
+             the sweep for the same pseudo-element - which is exactly how ten
+             tooltips silently stopped painting.
+             The bubble still cannot reach the accessibility tree, and these
+             strings carry the only visible copy of the keyboard shortcuts, so
+             the sr-only block at the end of the bar mirrors them for
+             aria-describedby. Keep the two in step. -->
+        <nav id="topbar-actions" aria-label="Lesson controls">
+          <div class="btn-group" data-group="lesson" role="group" aria-label="Lesson">
+            <span class="tip tip-start" data-tip="Browse every level (Alt+L)">
+              <button id="btn-levels" class="btn" type="button" aria-label="Levels" aria-describedby="tip-levels">
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-levels" /></svg>
+                <span class="btn-label">Levels</span>
+              </button>
+            </span>
+            <span class="tip" data-tip="Show what this level asks for (Alt+G)">
+              <button id="btn-objective" class="btn" type="button" aria-label="Objective" aria-describedby="tip-objective">
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-objective" /></svg>
+                <span class="btn-label">Objective</span>
+              </button>
+            </span>
+            <span class="tip" data-tip="A nudge in the right direction">
+              <button id="btn-hint" class="btn" type="button" aria-label="Hint" aria-describedby="tip-hint">
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-hint" /></svg>
+                <span class="btn-label">Hint</span>
+              </button>
+            </span>
+            <span class="tip" data-tip="Reveal one working answer">
+              <button id="btn-solution" class="btn" type="button" aria-label="Solution" aria-describedby="tip-solution">
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-solution" /></svg>
+                <span class="btn-label">Solution</span>
+              </button>
+            </span>
+          </div>
+
+          <div class="btn-group" data-group="repo" role="group" aria-label="Repository">
+            <span class="tip" data-tip="Step back one command (Ctrl+Z)">
+              <button id="btn-undo" class="btn" type="button" aria-label="Undo" aria-describedby="tip-undo">
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-undo" /></svg>
+                <span class="btn-label">Undo</span>
+              </button>
+            </span>
+            <span class="tip" data-tip="Back to the starting repository">
+              <button id="btn-reset" class="btn" type="button" aria-label="Reset" aria-describedby="tip-reset">
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-reset" /></svg>
+                <span class="btn-label">Reset</span>
+              </button>
+            </span>
+          </div>
+
+          <div class="btn-group" data-group="utility" role="group" aria-label="Settings">
+            <span class="tip tip-end" data-tip="Command reference and shortcuts (?)">
+              <button id="btn-help" class="btn" type="button" aria-label="Help" aria-describedby="tip-help">
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-help" /></svg>
+                <span class="btn-label">Help</span>
+              </button>
+            </span>
+            <span class="tip tip-end" data-tip="Switch between day and dusk">
+              <button id="btn-theme" class="btn" type="button" aria-label="Theme" aria-describedby="tip-theme">
+                <svg class="icon icon-when-day" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-theme-day" /></svg>
+                <svg class="icon icon-when-dusk" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-theme-dusk" /></svg>
+                <span class="btn-label">Theme</span>
+              </button>
+            </span>
+            <span class="tip tip-end" data-tip="Mute or unmute the interface sounds">
+              <button id="btn-sound" class="btn" type="button" aria-label="Sound" aria-pressed="true" aria-describedby="tip-sound">
+                <svg class="icon icon-when-on" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-sound-on" /></svg>
+                <svg class="icon icon-when-off" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-sound-off" /></svg>
+                <span class="btn-label">Sound</span>
+              </button>
+            </span>
+            <span class="tip tip-end" data-tip="Fill the screen">
+              <button id="btn-fullscreen" class="btn" type="button" aria-label="Fullscreen" aria-describedby="tip-fullscreen">
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-fullscreen" /></svg>
+                <span class="btn-label">Fullscreen</span>
+              </button>
+            </span>
+          </div>
+        </nav>
+
+        <div class="sr-only" id="topbar-tips">
+          <span id="tip-levels">Browse every level. Shortcut: Alt plus L.</span>
+          <span id="tip-objective">Show what this level asks for. Shortcut: Alt plus G.</span>
+          <span id="tip-hint">A nudge in the right direction.</span>
+          <span id="tip-solution">Reveal one working answer.</span>
+          <span id="tip-undo">Step back one command. Shortcut: Control plus Z.</span>
+          <span id="tip-reset">Back to the starting repository.</span>
+          <span id="tip-help">Command reference and shortcuts. Shortcut: question mark.</span>
+          <span id="tip-theme">Switch between day and dusk.</span>
+          <span id="tip-sound">Mute or unmute the interface sounds.</span>
+          <span id="tip-fullscreen">Fill the screen.</span>
+        </div>
+      </header>
+
+      <noscript>
+        <p class="noscript-note">
+          Learn Git Aero runs entirely in your browser and needs JavaScript switched on. Enable it
+          and reload the page to start the first lesson.
+        </p>
+      </noscript>
+
+      <main id="workspace" tabindex="-1">
+        <!-- terminal-view.js renders its own glass shell with a title bar, so this
+             pane is a bare frame: a second header here would just say "Terminal" twice. -->
+        <section id="terminal-pane" class="panel" aria-label="Terminal">
+          <div id="terminal-host"></div>
+        </section>
+
+        <div
+          id="pane-divider"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the terminal"
+          tabindex="0"
+        ></div>
+
+        <section id="canvas-pane" class="stage panel" aria-label="Commit graph">
+          <div class="panel-head">
+            <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-tree" /></svg>
+            <span>Commit graph</span>
+            <span class="panel-head-spacer"></span>
+            <!-- Two strings, one truth per input type. "Scroll to zoom" is mouse
+                 language and a finger has no wheel; on a phone the graph scales
+                 commit ids down rather than clipping history, so pinch is the
+                 reader's only route back to a legible id and the hint has to say
+                 so. aero.css picks one with (pointer: coarse) - both are in the
+                 DOM, so a hybrid device still gets a true string either way. -->
+            <span class="panel-head-hint">
+              <span class="hint-fine">Drag to pan, scroll to zoom</span>
+              <span class="hint-coarse">Pinch to zoom, drag to pan</span>
+            </span>
+          </div>
+          <div class="canvas-stage">
+            <div id="tree-host"></div>
+            <aside id="goal-panel" class="glass-dim" aria-label="Goal state" hidden>
+              <div class="goal-head">
+                <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-goal" /></svg>
+                <span>Goal</span>
+                <span class="goal-head-sub">target state</span>
+                <button
+                  id="goal-close"
+                  class="btn btn-icon btn-sm"
+                  type="button"
+                  aria-label="Close the goal panel"
+                >
+                  <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#icon-close" /></svg>
+                </button>
+              </div>
+              <div id="goal-host"></div>
+            </aside>
+            <p id="command-hint" role="status" aria-live="polite"></p>
+          </div>
+        </section>
+      </main>
+
+      <div id="modal-root"></div>
+      <div id="toast-root" role="region" aria-label="Notifications"></div>
+    </div>
+
+    <!-- Opened by double-clicking index.html, the page loads over file:// and
+         every browser blocks ES modules there as a cross-origin request. The
+         module below never runs, so the app renders its empty shell and every
+         control is dead with nothing on screen to say why. This plain script is
+         not a module, so it always runs, and it replaces the shell with
+         instructions rather than leaving a beautiful blank page. -->
+    <script>
+      if (location.protocol === 'file:') {
+        document.documentElement.classList.add('needs-server');
+        document.addEventListener('DOMContentLoaded', function () {
+          var app = document.getElementById('app');
+          if (!app) return;
+          var s = document.createElement('style');
+          // Self-contained: this must render even if a stylesheet is missing.
+          s.textContent =
+            '.needs-server-card{max-width:44rem;margin:12vh auto;padding:2rem 2.25rem;' +
+            'font:16px/1.6 "Segoe UI",system-ui,sans-serif;color:#04263a;' +
+            'background:rgba(255,255,255,.82);border:1px solid rgba(255,255,255,.9);' +
+            'border-radius:18px;box-shadow:0 14px 38px rgba(4,44,70,.26)}' +
+            '.needs-server-card h1{margin:0 0 .75rem;font-size:1.6rem}' +
+            '.needs-server-card code{font-family:Consolas,monospace;background:rgba(9,61,92,.1);' +
+            'padding:.1em .4em;border-radius:6px}' +
+            '.needs-server-card pre{background:rgba(9,61,92,.1);padding:.75rem 1rem;' +
+            'border-radius:10px;overflow-x:auto}' +
+            '.needs-server-card pre code{background:none;padding:0}' +
+            '.needs-server-card a{color:#05517c}';
+          document.head.appendChild(s);
+          app.innerHTML =
+            '<div class="needs-server-card">' +
+            '<h1>This page needs a local server</h1>' +
+            '<p>You have opened it straight from the file system. Browsers block ' +
+            'JavaScript modules over <code>file://</code>, so none of the app can load. ' +
+            'Nothing is broken - it just needs to be served over http.</p>' +
+            '<p><strong>Windows:</strong> double-click <code>start.cmd</code> in this folder.</p>' +
+            '<p><strong>Or from a terminal, in this folder:</strong></p>' +
+            '<pre><code>python -m http.server 8099</code></pre>' +
+            '<p>Then open <a href="http://localhost:8099/">http://localhost:8099/</a></p>' +
+            '</div>';
+        });
+      }
+    </script>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

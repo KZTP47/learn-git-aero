@@ -1,0 +1,583 @@
+/* ==========================================================================
+   Learn Git Aero - design tokens
+   Token NAMES from CONTRACT.md section 7 are frozen; DESIGN owns the values
+   and may add tokens. This is the ONLY file allowed to contain literal colours.
+
+   Palette story
+   -------------
+   day  "Bay morning"  - a saturated coastal sky falling through aqua into deep
+                          water, a warm sun bloom top-left with real lens haze,
+                          and a leaf-green glow along the bottom edge. That
+                          green is the Frutiger Aero tell: sky, water, nature.
+   dusk "Deep current" - the same bay at night. Ink-blue water, a cold moon
+                          bloom, bioluminescent aqua and green. Still wet: the
+                          rims, gloss and specular dots stay bright, only the
+                          fills go deep.
+
+   How vividness and legibility coexist
+   ------------------------------------
+   The saturated background is meant to be SEEN, so it is never covered by a
+   white wash. Instead the app has two classes of surface:
+
+     stage surfaces  (--stage-bg)  nearly clear. The commit graph lives here and
+                                   draws its own opaque commit/label fills, so
+                                   the sky, rays, orbs and bubbles read through.
+     reading surfaces              frosted enough to carry body text:
+       --glass-bg / --glass-bg-strong
+                                   terminal, modals, goal panel, panes
+       --topbar-bg                 the top rail
+       --head-bg                   frosted title bands (composited on top of
+                                   whatever surface they sit on)
+       --pill-bg                   pills and badges
+       --glass-bg-dim              recessed wells
+
+   Contrast policy - two measurements, not eyeballs
+   ------------------------------------------------
+   1. Token model (test/style-guide.html, window.__lab.contrast). Text is scored
+      against the COMPOSITED colour: surface fill plus the gloss overlay that
+      sits under the text, over --probe-bg-dark AND --probe-bg-light, the
+      extreme colours #aero-bg can present behind a panel. 148 combinations.
+   2. Render sweep. Each scene is screenshotted twice - once normally, once with
+      every glyph fill forced transparent - and the two are diffed to get the
+      exact glyph mask. Each glyph pixel is then scored against the real
+      composited backdrop underneath it, through glass, gloss, backdrop-filter
+      and the animated sky. This is the one that catches SVG text in the commit
+      graph, disabled controls and icon glyphs, none of which the token model
+      can see. Keep BOTH green: the model guards the tokens, the sweep guards
+      what a reader actually looks at.
+     reading surfaces: every ink (--text-strong --text --text-muted --ok --warn
+                       --danger --info --link) >= 4.5:1
+     --glass-bg:       also a reading surface. terminal.css builds the terminal
+                       out of it directly over the water, so it carries every
+                       ink too; --glass-bg-strong is simply the heavier pane.
+     --accent:         decorative (rims, glows, fills). Text use only at
+                       >= 18.66px or bold >= 14px, where 3:1 applies.
+   ========================================================================== */
+
+html[data-theme='day'],
+:root {
+  color-scheme: light;
+
+  /* --- Aero palette ----------------------------------------------------- */
+  --sky-1: #eafbff;
+  --sky-2: #8fdcfa;
+  --sky-3: #4fb9ea;
+  --sky-4: #1189c9;
+  --deep-1: #0a6a9c;
+  --deep-2: #054865;
+  --leaf-1: #ecfcdb;
+  --leaf-2: #9fe463;
+  --leaf-3: #3f9c2b;
+  --aqua-1: #7bf3e2;
+  --aqua-2: #06b0a6;
+  --amber-1: #ffcb52;
+  --coral-1: #ff8272;
+  --violet-1: #a494ff;
+
+  /* --- Semantic --------------------------------------------------------- */
+  --accent: #0b7fb8;
+  --accent-2: #06a396;
+  --ok: #145425;
+  --warn: #6f4703;
+  --danger: #8f2412;
+  --info: #085073;
+
+  /* --- Text ------------------------------------------------------------- */
+  --text-strong: #04263a;
+  --text: #0f3d56;
+  --text-muted: #2a4a5c;
+  --text-inverse: #f7fdff;
+  --link: #05517c;
+
+  /* --- Glass ------------------------------------------------------------ */
+  /* Tinted rather than pure white: glass with colour in it looks wet, plain
+     white looks like paper. */
+  --glass-bg: rgba(194, 236, 252, 0.76);
+  --glass-bg-strong: rgba(200, 238, 253, 0.84);
+  /* "dim" is a recessed wet well, not a darker pane: in a light theme the
+     inset shadow reads as depth while the fill stays legible. */
+  --glass-bg-dim: rgba(228, 247, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.78);
+  --glass-border-strong: rgba(255, 255, 255, 0.95);
+  --glass-highlight: rgba(255, 255, 255, 0.98);
+  --glass-shadow: rgba(4, 44, 70, 0.3);
+  --glass-blur: 20px;
+  --glass-saturate: 180%;
+
+  /* Opaque stand-ins used when backdrop-filter is unavailable or printing. */
+  --glass-bg-fallback: #cdeefb;
+  --glass-bg-strong-fallback: #d8f2fd;
+  --glass-bg-dim-fallback: #eef8fe;
+
+  /* --- Elevation -------------------------------------------------------- */
+  --shadow-1: 0 1px 2px rgba(4, 44, 70, 0.18);
+  --shadow-2: 0 4px 14px rgba(4, 44, 70, 0.2);
+  --shadow-3: 0 14px 38px rgba(4, 44, 70, 0.26);
+  --shadow-4: 0 28px 70px rgba(4, 44, 70, 0.34);
+  --glow: 0 0 16px rgba(58, 191, 246, 0.6);
+  --glow-strong: 0 0 34px rgba(58, 191, 246, 0.85);
+
+  /* --- Radii ------------------------------------------------------------ */
+  --radius-sm: 7px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 26px;
+  --radius-pill: 999px;
+
+  /* --- Spacing ---------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* --- Type ------------------------------------------------------------- */
+  --font-ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system,
+    'Helvetica Neue', 'Noto Sans', Arial, sans-serif;
+  --font-mono: 'Cascadia Mono', 'Cascadia Code', ui-monospace, 'SF Mono', 'Consolas',
+    'Liberation Mono', Menlo, monospace;
+  --fs-xs: 11.5px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: clamp(19px, 0.6vw + 17px, 22px);
+  --fs-2xl: clamp(23px, 1vw + 19px, 29px);
+  --fs-3xl: clamp(29px, 1.8vw + 22px, 40px);
+  --lh-tight: 1.25;
+  --lh-body: 1.55;
+  --tracking-tight: -0.011em;
+  --tracking-wide: 0.06em;
+
+  /* --- Motion ----------------------------------------------------------- */
+  --dur-1: 120ms;
+  --dur-2: 260ms;
+  --dur-3: 480ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* --- Tree ------------------------------------------------------------- */
+  --commit-fill: #f0fbff;
+  --commit-fill-2: #7fcdf0;
+  --commit-stroke: #0d6d9c;
+  --commit-text: #04263a;
+  --edge: rgba(6, 96, 143, 0.75);
+  --edge-dim: rgba(6, 96, 143, 0.3);
+  /* Deep indigo, and the only hue in the app outside the cyan-to-sea-green
+     family - which is the point: HEAD is one object type, repeated on every
+     board, and it has to be findable at a glance without shouting. The old
+     burnt amber (#8a4100) did the finding but it was the single most
+     off-palette thing on screen, the one brown in a bay of blue and green,
+     and in dusk its 30%-tinted capsule was the brightest 8x8 block in the
+     whole viewport.
+     The constraint is unchanged: tree.css paints --text-inverse on a solid
+     --head-color pill AND paints --head-color as text on a light glass pill,
+     so one value has to clear 4.5:1 in both directions. This one measures
+     10.8:1 under white ink and 9.2:1 as ink on light glass. */
+  --head-color: #28357e;
+  --branch-bg: rgba(255, 255, 255, 0.88);
+  --branch-text: #04263a;
+  /* Frosted glass with a warm rim, not a solid gold body. tree.css strokes the
+     tag pill with --amber-1, so the family still reads as "tag" from the rim
+     alone; a filled mustard capsule was a second off-palette block sitting
+     next to the HEAD badge. */
+  --tag-bg: rgba(255, 250, 236, 0.86);
+  --origin-bg: rgba(198, 236, 253, 0.34);
+  --origin-border: rgba(11, 127, 184, 0.5);
+
+  /* Eight steps across the one band the whole app lives in, 150deg to 222deg of
+     hue, spaced 14.4deg apart and held at one lightness.
+     This ramp used to separate branches by LIGHTNESS - a light and a deep of
+     the same hue - on the sound argument that lightness survives greyscale and
+     dichromacy where hue does not. It cannot survive the graph, though: the
+     tree caps line work at OKLCH lightness 0.52 so pale branches keep their
+     3:1 against a bright bay, and that cap collapses a light/deep pair onto
+     the same colour. c3 and c7 sat 4deg apart in hue and 0.25 apart in
+     lightness; after the cap their edges were the same teal. Measured on
+     advanced-capstone, api and ui were indistinguishable.
+     So the ramp now moves on BOTH axes at once, and each neighbour swaps: a
+     14.4deg hue step and, with it, a lightness step from OKLCH 0.59 to 0.42.
+     Two touching steps therefore differ as mid-green against deep teal, not as
+     green against green - and 0.42 is under the tree's cap, so the cap has
+     nothing to take. Steps two apart share a lightness but are 29deg away,
+     which is separation enough on hue alone. Measured across the five slots
+     the tree hands to non-main branches, every pair is either 29deg apart or
+     14deg apart with 0.15 of lightness between them.
+     The band cannot do better on hue alone: 150-222 is 72deg, so six colours
+     can be 14.4deg apart and eight 10.3deg - nowhere near the 25deg two hues
+     need to read as different colours. Anything wider leaves the Aero water
+     palette, and 222 is already as close to the indigo HEAD (230deg) as a
+     branch should come. Past six branches even the second axis runs out, and
+     that needs a non-colour channel - a dash pattern or a rim weight - which
+     belongs to the tree, not here.
+       c2 150 light  c6 157 deep  c5 164 deep  c3 179 light
+       c8 193 deep   c1 208 light c7 215 light c4 222 deep */
+  --branch-c1: #1087be;
+  --branch-c2: #259360;
+  --branch-c3: #098f92;
+  --branch-c4: #004982;
+  --branch-c5: #00544c;
+  --branch-c6: #005542;
+  --branch-c7: #008bae;
+  --branch-c8: #01515c;
+
+  /* ======================================================================
+     DESIGN-owned additions
+     ====================================================================== */
+
+  /* Background stops. #aero-bg is built ONLY from these, so the probes below
+     really do bound what can sit behind a panel. */
+  --bg-1: #eafbff;
+  --bg-2: #8fdcfa;
+  --bg-3: #3fb2e8;
+  --bg-4: #1189c9;
+  --bg-5: #0a6a9c;
+  --bg-bloom: rgba(255, 255, 255, 0.92);
+  --bg-bloom-warm: rgba(255, 238, 186, 0.55);
+  --bg-bloom-ring: rgba(255, 255, 255, 0.34);
+  --bg-leaf: rgba(159, 228, 99, 0.45);
+  --bg-ray: rgba(255, 255, 255, 0.5);
+  --bg-caustic: rgba(255, 255, 255, 0.55);
+  --bg-surface-line: rgba(255, 255, 255, 0.55);
+  --bg-vignette: rgba(5, 60, 92, 0.3);
+  /* Decoration alphas are deliberately below the old values. A bokeh sphere
+     that reads at full strength over open water still has to lose to a commit
+     bead when it drifts under one. */
+  --bokeh-1: rgba(255, 255, 255, 0.52);
+  --bokeh-2: rgba(123, 243, 226, 0.44);
+  --bokeh-3: rgba(159, 228, 99, 0.34);
+  --bubble-fill: rgba(255, 255, 255, 0.24);
+  --bubble-rim: rgba(255, 255, 255, 0.78);
+  --bubble-spec: rgba(255, 255, 255, 0.88);
+  /* Only a whisper: the background is meant to be seen. */
+  --scrim: rgba(255, 255, 255, 0.07);
+  /* Light mist over the water under the commit graph, not a dark pool. It does
+     two jobs at once: it pulls the water UP towards the brightness of a white
+     bokeh sphere, so the sphere stops standing out as a separate object, and
+     because a bead is only ~25% opaque at its centre it also lifts every bead
+     interior - which is what carries the dark commit id. Measured: day commit
+     ids went 3.67:1 -> 5.0:1 on this change alone. Kept as light as the
+     measurement allows: the saturated water is the point of the theme. */
+  --stage-scrim: rgba(214, 242, 253, 0.18);
+
+  /* Extremes #aero-bg can present behind a glass surface. --probe-bg-dark is
+     deliberately darker than the darkest gradient stop in the panel band so it
+     also absorbs what backdrop-filter: saturate() does to the backdrop. */
+  --probe-bg-dark: #085c89;
+  --probe-bg-light: #ffffff;
+
+  /* Chrome surfaces */
+  --topbar-bg: rgba(198, 238, 253, 0.82);
+  --panel-bg: rgba(194, 236, 252, 0.76);
+  --stage-bg: rgba(226, 248, 255, 0.16);
+  --head-bg: rgba(255, 255, 255, 0.72);
+  --well-bg: rgba(9, 61, 92, 0.08);
+  --hairline: rgba(5, 60, 92, 0.16);
+  --hairline-light: rgba(255, 255, 255, 0.75);
+  /* Wet edges: a bright specular rim on top, a cool reflected rim underneath. */
+  --rim-top: rgba(255, 255, 255, 1);
+  --rim-bottom: rgba(151, 224, 255, 0.55);
+
+  /* Buttons - classic Aero capsule: light glossy face, dark ink. */
+  --btn-face-1: rgba(255, 255, 255, 0.92);
+  --btn-face-2: rgba(214, 241, 253, 0.66);
+  --btn-face-hover-1: rgba(255, 255, 255, 1);
+  --btn-face-hover-2: rgba(230, 248, 255, 0.82);
+  --btn-gloss: rgba(255, 255, 255, 0.92);
+  --btn-rim: rgba(255, 255, 255, 1);
+  --btn-rim-outer: rgba(6, 78, 118, 0.32);
+  --btn-inner-shadow: rgba(5, 60, 92, 0.3);
+  --btn-text: #04263a;
+  --btn-sweep: rgba(255, 255, 255, 0.85);
+
+  --btn-primary-1: #a5e9ff;
+  --btn-primary-2: #35b4ea;
+  --btn-primary-1-hover: #c1f2ff;
+  --btn-primary-2-hover: #4cc4f5;
+  --btn-primary-rim: rgba(255, 255, 255, 1);
+  --btn-primary-rim-outer: rgba(7, 82, 124, 0.6);
+  --btn-primary-text: #04263a;
+  --btn-primary-gloss: rgba(255, 255, 255, 0.78);
+
+  --btn-danger-1: #b8331d;
+  --btn-danger-2: #7f1d0e;
+  --btn-danger-1-hover: #c93d25;
+  --btn-danger-2-hover: #8f2414;
+  --btn-danger-rim: rgba(255, 208, 198, 0.8);
+  --btn-danger-rim-outer: rgba(74, 15, 6, 0.65);
+  --btn-danger-text: #fff5f2;
+  /* Per-variant gloss. A saturated face can only take a whisper of white
+     before light ink drops under 4.5:1, so each variant sets its own. */
+  --btn-danger-gloss: rgba(255, 255, 255, 0.12);
+
+  --btn-ghost-hover: rgba(255, 255, 255, 0.5);
+  --btn-disabled-text: rgba(15, 61, 86, 0.78);
+
+  /* Focus, selection, scrollbars.
+     The ring is darker than the accent it comes from. WCAG 1.4.11 wants 3:1
+     against what the ring is drawn on, and in this app that is rarely the page
+     - it is pale glass, and on footer glass #0b7fb8 measured 2.2:1. #065e8a is
+     4.4:1 there and still reads as the same blue. */
+  --focus-ring: #065e8a;
+  --focus-ring-halo: rgba(6, 94, 138, 0.36);
+  --focus-ring-contrast: rgba(255, 255, 255, 0.98);
+  --selection-bg: rgba(11, 127, 184, 0.28);
+  --selection-text: #04263a;
+  --scroll-thumb: rgba(6, 96, 143, 0.4);
+  --scroll-thumb-hover: rgba(6, 96, 143, 0.6);
+  --scroll-track: rgba(255, 255, 255, 0.24);
+
+  /* Pills, tooltips, dividers */
+  --pill-bg: rgba(255, 255, 255, 0.78);
+  --pill-border: rgba(255, 255, 255, 0.95);
+  --pill-gloss: rgba(255, 255, 255, 0.85);
+  --pill-text: #0f3d56;
+  --tooltip-bg: rgba(5, 38, 58, 0.95);
+  --tooltip-text: #f2fbff;
+  --divider-line: rgba(5, 60, 92, 0.18);
+  --divider-grip: rgba(5, 60, 92, 0.45);
+
+  /* Status tints (badges, toasts, boot errors) */
+  --ok-tint: rgba(63, 156, 43, 0.18);
+  --warn-tint: rgba(255, 203, 82, 0.3);
+  --danger-tint: rgba(204, 60, 36, 0.16);
+  --info-tint: rgba(11, 127, 184, 0.16);
+
+  /* Print */
+  --print-bg: #ffffff;
+  --print-text: #101010;
+  --print-rule: #999999;
+
+  /* Not a palette colour: the opaque end of a CSS mask gradient. */
+  --mask-opaque: #000000;
+}
+
+html[data-theme='dusk'] {
+  color-scheme: dark;
+
+  /* --- Aero palette ----------------------------------------------------- */
+  --sky-1: #123f5e;
+  --sky-2: #0c2c48;
+  --sky-3: #1b567a;
+  --sky-4: #2f92c6;
+  --deep-1: #04121f;
+  --deep-2: #01080e;
+  --leaf-1: #17331a;
+  --leaf-2: #6ee08a;
+  --leaf-3: #a6f08f;
+  --aqua-1: #4ae0d0;
+  --aqua-2: #0e9e96;
+  --amber-1: #ffc861;
+  --coral-1: #ff9d8b;
+  --violet-1: #bfb1ff;
+
+  /* --- Semantic --------------------------------------------------------- */
+  --accent: #4fc3f2;
+  --accent-2: #46dcce;
+  --ok: #6ee08a;
+  --warn: #ffc861;
+  --danger: #ff9d8b;
+  --info: #6cc6f2;
+
+  /* --- Text ------------------------------------------------------------- */
+  --text-strong: #f0fbff;
+  --text: #cde8f7;
+  --text-muted: #aacfe4;
+  --text-inverse: #04202f;
+  --link: #6fd0f7;
+
+  /* --- Glass ------------------------------------------------------------ */
+  /* Denser fills than before. modals.css paints --glass-highlight at FULL
+     alpha across the top 46% of every dialog, so this token cannot be raised
+     to give the beads more specular without washing out a modal header - the
+     sweep caught exactly that. The fills carry the extra margin instead, which
+     is what --text-muted on a dusk lesson header needed anyway.
+
+     Every dark fill below sits on hue 192-194, the same hue as the water it
+     floats on. It used to sit on 205-208: rendered, the terminal measured
+     #0a2437 (hue 205) against water at #1f4046 (hue 189), and a 16-degree gap
+     between the two largest blocks on screen is exactly what "a different
+     designer did the dark theme" looks like. Luminance is held within about
+     7% of the old values at every stop, so the ink margins the sweep measured
+     do not move; only the hue does. */
+  --glass-bg: rgba(9, 33, 40, 0.88);
+  --glass-bg-strong: rgba(6, 27, 33, 0.9);
+  --glass-bg-dim: rgba(5, 25, 30, 0.7);
+  --glass-border: rgba(150, 224, 246, 0.32);
+  --glass-border-strong: rgba(178, 238, 255, 0.5);
+  --glass-highlight: rgba(198, 243, 255, 0.2);
+  --glass-shadow: rgba(0, 9, 10, 0.65);
+  --glass-blur: 22px;
+  --glass-saturate: 165%;
+
+  --glass-bg-fallback: #102b32;
+  --glass-bg-strong-fallback: #0b232a;
+  --glass-bg-dim-fallback: #06161b;
+
+  /* --- Elevation -------------------------------------------------------- */
+  --shadow-1: 0 1px 2px rgba(0, 9, 10, 0.6);
+  --shadow-2: 0 4px 16px rgba(0, 9, 10, 0.65);
+  --shadow-3: 0 16px 40px rgba(0, 9, 10, 0.7);
+  --shadow-4: 0 30px 76px rgba(0, 9, 10, 0.8);
+  --glow: 0 0 18px rgba(79, 195, 242, 0.55);
+  --glow-strong: 0 0 38px rgba(79, 195, 242, 0.8);
+
+  /* --- Tree ------------------------------------------------------------- */
+  --commit-fill: #0f3550;
+  --commit-fill-2: #17638e;
+  --commit-stroke: #62c8f2;
+  --commit-text: #f0fbff;
+  --edge: rgba(154, 216, 246, 0.62);
+  --edge-dim: rgba(154, 216, 246, 0.26);
+  /* The day indigo lifted to read as ink on dark glass. tree.css tints the
+     dusk HEAD capsule with 30% of this over --branch-bg, which lands at
+     8.1:1 under --text-strong and, unlike the old amber, well below the
+     primary button in brightness. */
+  --head-color: #9aa8f0;
+  --branch-bg: rgba(11, 40, 62, 0.9);
+  --branch-text: #f0fbff;
+  /* Unused in dusk - tree.css tints the tag with live --amber-1 over
+     --branch-bg - but kept in step with day: frosted, not filled. */
+  --tag-bg: rgba(24, 48, 56, 0.86);
+  --origin-bg: rgba(20, 72, 104, 0.34);
+  --origin-border: rgba(79, 195, 242, 0.45);
+
+  /* The same eight hue steps as day, lifted to sit on dark water. Dusk is not
+     under the lightness cap - it clears 3:1 on its own - but the two themes
+     have to agree on which hue means which branch, or the theme toggle
+     renames every line on the board. */
+  --branch-c1: #80ceff;
+  --branch-c2: #7fdba8;
+  --branch-c3: #55dbde;
+  --branch-c4: #5290cf;
+  --branch-c5: #01a294;
+  --branch-c6: #27a283;
+  --branch-c7: #64d4fb;
+  --branch-c8: #009eb2;
+
+  /* --- DESIGN-owned additions ------------------------------------------ */
+  /* Twilight, not midnight - and this time measured rather than asserted. The
+     old ramp claimed to be a warm teal dusk and was not: the graph water
+     rendered #0b1e2d, L* 10.5, with channels B >> G >> R, which is the exact
+     opposite of teal and reads as cold near-black navy.
+     Every stop below sits on hue 190 (B only just ahead of G) with the red
+     channel deliberately raised, and the band the commit graph sits over
+     lands at L* 18-25 instead of 10. The vignette and the stage scrim were
+     lightened to match, because they, not the ramp, were doing most of the
+     darkening - and they were also swallowing the caustic layer whole. */
+  --bg-1: #24636b;
+  --bg-2: #1b4c56;
+  --bg-3: #163f47;
+  --bg-4: #113239;
+  --bg-5: #0d272d;
+  --bg-bloom: rgba(255, 206, 143, 0.32);
+  --bg-bloom-warm: rgba(255, 158, 92, 0.24);
+  --bg-bloom-ring: rgba(255, 214, 170, 0.2);
+  --bg-leaf: rgba(110, 224, 138, 0.26);
+  /* Warm at the top where the sun is, so the rays read as sunset light in
+     water rather than a blue-grey haze. */
+  --bg-ray: rgba(255, 226, 186, 0.17);
+  --bg-caustic: rgba(178, 240, 250, 0.4);
+  --bg-surface-line: rgba(180, 232, 252, 0.4);
+  --bg-vignette: rgba(4, 22, 26, 0.42);
+  --bokeh-1: rgba(168, 226, 250, 0.4);
+  --bokeh-2: rgba(74, 224, 208, 0.36);
+  --bokeh-3: rgba(110, 224, 138, 0.26);
+  --bubble-fill: rgba(154, 216, 246, 0.18);
+  --bubble-rim: rgba(198, 240, 255, 0.68);
+  --bubble-spec: rgba(235, 251, 255, 0.8);
+  --scrim: rgba(3, 18, 20, 0.12);
+  --stage-scrim: rgba(8, 34, 38, 0.24);
+
+  /* The real darkest composite behind a panel, not an invented black: bg-5
+     under the vignette measures about this. A darker probe flatters light ink
+     and the lab is supposed to be pessimistic. */
+  --probe-bg-dark: #0a2025;
+  --probe-bg-light: #7cb6d4;
+
+  --topbar-bg: rgba(6, 29, 35, 0.88);
+  --panel-bg: rgba(9, 33, 40, 0.88);
+  --stage-bg: rgba(8, 34, 40, 0.16);
+  /* Darker than the fills around it, on purpose. The panel header is the one
+     dusk surface carrying a saturated --accent glyph rather than near-white
+     ink, and a light glyph wants a DEEP backdrop: at rgba(9,36,44,.66) the
+     commit-graph header icon measured 2.97:1 against its real composite, just
+     under the 3:1 that non-text UI has to clear. This lands it at 3.4:1 and
+     lifts --text-muted in the same band from 4.62:1 to 5.0:1. */
+  --head-bg: rgba(8, 32, 39, 0.72);
+  --well-bg: rgba(1, 10, 12, 0.42);
+  --hairline: rgba(154, 226, 246, 0.18);
+  --hairline-light: rgba(198, 243, 255, 0.26);
+  --rim-top: rgba(198, 243, 255, 0.55);
+  --rim-bottom: rgba(79, 205, 242, 0.3);
+
+  /* Hue 193 like every other dusk fill, but luminance matched to the navy
+     values these replaced rather than to their hue. Rotating a colour toward
+     green raises its luminance for free - green carries 71% of the luminance
+     coefficient - and the first pass did exactly that: the hover face went
+     +10% brighter and dropped --btn-text on a hovered top-bar button to
+     4.46:1. Each stop below is within 3% of the luminance it replaced. */
+  --btn-face-1: rgba(34, 81, 94, 0.9);
+  --btn-face-2: rgba(11, 42, 51, 0.78);
+  --btn-face-hover-1: rgba(44, 97, 112, 0.94);
+  --btn-face-hover-2: rgba(16, 57, 68, 0.85);
+  --btn-gloss: rgba(198, 243, 255, 0.16);
+  --btn-rim: rgba(198, 243, 255, 0.55);
+  --btn-rim-outer: rgba(0, 9, 10, 0.7);
+  --btn-inner-shadow: rgba(0, 9, 10, 0.7);
+  --btn-text: #f0fbff;
+  --btn-sweep: rgba(198, 243, 255, 0.34);
+
+  /* Toned down and given more range top-to-bottom. At #6fe1f6 the primary
+     button was the brightest pixel in the whole dusk screen, brighter than
+     anything in the commit graph it sits above. */
+  --btn-primary-1: #63d6ef;
+  --btn-primary-2: #1f9ecd;
+  --btn-primary-1-hover: #78e2f8;
+  --btn-primary-2-hover: #29aade;
+  --btn-primary-rim: rgba(235, 252, 255, 0.9);
+  --btn-primary-rim-outer: rgba(0, 6, 12, 0.6);
+  --btn-primary-text: #04202f;
+  --btn-primary-gloss: rgba(235, 252, 255, 0.35);
+
+  --btn-danger-1: #a32d19;
+  --btn-danger-2: #701a0c;
+  --btn-danger-1-hover: #b53520;
+  --btn-danger-2-hover: #801f0f;
+  --btn-danger-rim: rgba(255, 197, 183, 0.55);
+  --btn-danger-rim-outer: rgba(0, 6, 12, 0.7);
+  --btn-danger-text: #ffeae4;
+  --btn-danger-gloss: rgba(235, 252, 255, 0.12);
+
+  --btn-ghost-hover: rgba(120, 190, 226, 0.16);
+  --btn-disabled-text: rgba(205, 232, 247, 0.72);
+
+  --focus-ring: #6fd0f7;
+  --focus-ring-halo: rgba(111, 208, 247, 0.38);
+  --focus-ring-contrast: rgba(2, 12, 21, 0.92);
+  --selection-bg: rgba(79, 195, 242, 0.34);
+  --selection-text: #f0fbff;
+  --scroll-thumb: rgba(154, 216, 246, 0.3);
+  --scroll-thumb-hover: rgba(154, 216, 246, 0.5);
+  --scroll-track: rgba(1, 9, 15, 0.34);
+
+  /* Denser and barely glossed. A pill is short, so its gloss band covers the
+     top half of the glyphs rather than sitting above them, and the lab scores
+     it at full coverage for exactly that reason. */
+  --pill-bg: rgba(11, 38, 60, 0.88);
+  --pill-border: rgba(154, 216, 246, 0.34);
+  --pill-gloss: rgba(198, 240, 255, 0.08);
+  --pill-text: #cde8f7;
+  --tooltip-bg: rgba(2, 14, 24, 0.96);
+  --tooltip-text: #eaf8ff;
+  --divider-line: rgba(154, 216, 246, 0.22);
+  --divider-grip: rgba(186, 234, 255, 0.6);
+
+  --ok-tint: rgba(110, 224, 138, 0.18);
+  --warn-tint: rgba(255, 200, 97, 0.18);
+  --danger-tint: rgba(255, 157, 139, 0.18);
+  --info-tint: rgba(79, 195, 242, 0.18);
+}

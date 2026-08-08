@@ -1,0 +1,2885 @@
+/* ==========================================================================
+   Learn Git Aero - modals, lesson dialog, level browser, help, toasts
+
+   Owns everything INSIDE #modal-root, plus #toast-root itself: where the toast
+   rail sits is a toast decision, and aero.css's viewport-centred default put it
+   on the seam between the two panes. aero.css still owns #modal-root, the .btn
+   system, .icon sizing and the focus rings; nothing here redefines those.
+   Every colour is a tokens.css variable - no literals.
+
+   Surface recipe (the "wet glass" the rest of the app uses):
+     1  a curved specular cap across the top      (.modal::before)
+     2  a rim bevel + corner sheen                (.modal::after)
+     3  a body gradient that falls from white into shallow aqua
+     4  a deep ambient shadow plus a coloured bloom
+   ========================================================================== */
+
+/* ==========================================================================
+   1. Layer + backdrop
+   ========================================================================== */
+
+.modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: calc(10 + var(--modal-depth, 0) * 10);
+  display: grid;
+  place-items: center;
+  padding: clamp(var(--space-3), 4vh, var(--space-7)) var(--space-4);
+  font-family: var(--font-ui);
+  color: var(--text);
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background:
+    radial-gradient(
+      68% 52% at 50% 40%,
+      color-mix(in srgb, var(--sky-3) 22%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      130% 95% at 50% 118%,
+      color-mix(in srgb, var(--deep-1) 60%, transparent),
+      transparent 64%
+    ),
+    color-mix(in srgb, var(--deep-2) 44%, transparent);
+  backdrop-filter: blur(calc(var(--glass-blur) * 1.5)) saturate(calc(var(--glass-saturate) + 20%));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.5))
+    saturate(calc(var(--glass-saturate) + 20%));
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+
+/* Stacked layers scrim less, so the modal underneath still reads. */
+.modal-layer[data-state='open'] .modal-backdrop {
+  opacity: calc(1 - var(--modal-depth, 0) * 0.32);
+}
+
+.modal-layer[data-state='exit'] .modal-backdrop {
+  opacity: 0;
+}
+
+/* ==========================================================================
+   2. Panel
+   ========================================================================== */
+
+.modal {
+  --panel-top: color-mix(in srgb, var(--sky-1) 90%, transparent);
+  --panel-mid: color-mix(in srgb, var(--sky-1) 86%, transparent);
+  --panel-bottom: color-mix(in srgb, var(--sky-2) 84%, transparent);
+  --panel-tray: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sky-2) 55%, transparent),
+    color-mix(in srgb, var(--sky-3) 34%, transparent)
+  );
+  --modal-w: 580px;
+  /* One inline padding for head, body and foot, and one reading measure that
+     every text column in every panel is centred on. Change them here. */
+  --modal-pad: var(--space-5);
+  --modal-measure: 62ch;
+  /* The scroll folds. --btn-inner-shadow is the one token that is a shadow in
+     both themes, so the lip darkens on day glass and on dusk glass alike
+     instead of turning into a light smear on one of them. */
+  --fold-line: color-mix(in srgb, var(--edge-dim) 95%, transparent);
+  --fold-shade: color-mix(in srgb, var(--btn-inner-shadow) 24%, transparent);
+
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  width: min(var(--modal-w), 100%);
+  max-height: min(88vh, 940px);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(
+    180deg,
+    var(--panel-top) 0%,
+    var(--panel-mid) 46%,
+    var(--panel-bottom) 100%
+  );
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow:
+    var(--shadow-4),
+    0 30px 80px -34px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 0 0 1px var(--hairline);
+  color: var(--text);
+  overflow: hidden;
+  outline: none;
+}
+
+html[data-theme='dusk'] .modal {
+  --panel-top: color-mix(in srgb, var(--sky-2) 92%, transparent);
+  --panel-mid: color-mix(in srgb, var(--sky-1) 92%, transparent);
+  --panel-bottom: color-mix(in srgb, var(--deep-1) 82%, transparent);
+  --panel-tray: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sky-2) 60%, transparent),
+    color-mix(in srgb, var(--deep-1) 55%, transparent)
+  );
+}
+
+/* 1. Specular cap. The curved lower edge is what makes glass look wet. */
+.modal::before {
+  content: '';
+  position: absolute;
+  inset: 1px 1px auto;
+  z-index: 0;
+  height: 46%;
+  max-height: 190px;
+  pointer-events: none;
+  border-radius: var(--radius-xl) var(--radius-xl) 50% 50% /
+    var(--radius-xl) var(--radius-xl) 30% 30%;
+  background: linear-gradient(
+    180deg,
+    var(--glass-highlight) 0%,
+    color-mix(in srgb, var(--glass-highlight) 42%, transparent) 46%,
+    transparent 100%
+  );
+}
+
+/* 2. Rim bevel plus a diagonal sheen off the top-left corner. */
+.modal::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    116deg,
+    color-mix(in srgb, var(--glass-highlight) 60%, transparent) 0%,
+    transparent 22%
+  );
+  box-shadow:
+    inset 0 1px 0 var(--glass-border-strong),
+    inset 1px 0 0 color-mix(in srgb, var(--glass-highlight) 60%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--glass-highlight) 40%, transparent),
+    inset 0 -16px 26px -20px var(--btn-inner-shadow);
+}
+
+.modal-sm { --modal-w: 440px; }
+.modal-md { --modal-w: 580px; }
+.modal-lg { --modal-w: 840px; }
+.modal-xl { --modal-w: 1140px; }
+
+/* Entrance and exit */
+.modal-layer[data-state='enter'] .modal {
+  opacity: 0;
+  transform: translate3d(0, 22px, 0) scale(0.93);
+}
+
+.modal-layer[data-state='open'] .modal {
+  opacity: 1;
+  transform: none;
+  transition:
+    transform var(--dur-3) var(--ease-spring),
+    opacity var(--dur-2) var(--ease-out);
+}
+
+.modal-layer[data-state='exit'] .modal {
+  opacity: 0;
+  transform: translate3d(0, 12px, 0) scale(0.965);
+  transition:
+    transform var(--dur-2) var(--ease-in-out),
+    opacity var(--dur-2) var(--ease-in-out);
+}
+
+.modal.is-dragging {
+  transition: none !important;
+}
+
+/* Drag-to-dismiss grabber, sheet mode only. */
+.modal-grab {
+  display: none;
+  position: relative;
+  z-index: 2;
+  padding: var(--space-2) 0 var(--space-1);
+  touch-action: none;
+  cursor: grab;
+}
+
+.modal-grab > span {
+  display: block;
+  width: 46px;
+  height: 5px;
+  margin: 0 auto;
+  border-radius: var(--radius-pill);
+  background: var(--divider-grip);
+  box-shadow: 0 1px 0 var(--hairline-light);
+}
+
+/* ==========================================================================
+   3. Head / body / foot
+   ========================================================================== */
+
+.modal-head {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--modal-pad) var(--space-3);
+  border-bottom: 1px solid var(--hairline);
+  box-shadow: 0 1px 0 var(--hairline-light);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-highlight) 55%, transparent),
+    color-mix(in srgb, var(--glass-highlight) 6%, transparent)
+  );
+}
+
+.modal-head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+  text-shadow: 0 1px 0 var(--hairline-light);
+}
+
+.modal-x {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--btn-rim-outer);
+  border-radius: var(--radius-pill);
+  background:
+    linear-gradient(180deg, var(--btn-face-1) 0%, var(--btn-face-1) 49%, var(--btn-face-2) 51%);
+  color: var(--text-muted);
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-1);
+  transition:
+    color var(--dur-1) var(--ease-out),
+    transform var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
+}
+
+.modal-x:hover {
+  color: var(--danger);
+  transform: rotate(90deg);
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-2),
+    var(--glow);
+}
+
+.modal-x .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* The scroll box. modal.js keeps .is-scrollable / .at-top / .at-bottom in sync
+   with the real geometry; the fade and the two fold marks below are driven
+   entirely off them. Those classes are load-bearing - if one fails to land the
+   fold silently guillotines a line - so nothing here may assume them.
+
+   A line of text must never end flush against the footer rule - at that point
+   the reader cannot tell a wrapped line from the end of the copy. So an
+   overflowing body gains a soft edge AND a run of empty space, and both go
+   away the moment there is genuinely nothing more to see. */
+.modal-body {
+  --fade-top: 0px;
+  --fade-bottom: 0px;
+  /* The floor the fade may never go below, and it is 94% for a reason worth
+     writing down. A mask that runs all the way to transparent takes real words
+     with it: a section heading sitting in the old 64px band measured 1.70:1 and
+     its 0/5 counter 1.59:1. At 1.7:1 a heading does not read as "there is more
+     below", it reads as DISABLED.
+
+     Fading toward the panel is a straight lerp of the ink toward its own
+     backdrop, so the ratio only ever falls. Solve it for the weakest copy in
+     these panels - body text at 5.12:1 - and the fade may not go below 0.936
+     before that copy crosses 4.5:1. Hence 94%: at this floor NOTHING that is
+     still on screen can drop under the body-text minimum, whatever it is, and
+     no hover or focus exception is needed to say so.
+
+     What the fade still buys at 6% is a cut edge that is not a hard rule. The
+     telling is done by the hairline, the shade and the chevron below. */
+  --mask-soft: color-mix(in srgb, var(--mask-opaque) 94%, transparent);
+
+  position: relative;
+  z-index: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  padding: var(--modal-pad);
+  /* Anything scrolled into view - a chip reached with the arrow keys, a link
+     reached with Tab - stops clear of both folds instead of landing half under
+     one of them. Load-bearing: it is what keeps a keyboard reader off the
+     softened rows entirely. */
+  scroll-padding-block: var(--space-6) var(--space-8);
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    var(--mask-soft) 0,
+    var(--mask-opaque) var(--fade-top),
+    var(--mask-opaque) calc(100% - var(--fade-bottom)),
+    var(--mask-soft) 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    var(--mask-soft) 0,
+    var(--mask-opaque) var(--fade-top),
+    var(--mask-opaque) calc(100% - var(--fade-bottom)),
+    var(--mask-soft) 100%
+  );
+  transition: none;
+}
+
+.modal-body.is-scrollable {
+  /* Roughly four lines of clear water under the last line of copy. */
+  padding-bottom: var(--space-8);
+}
+
+/* 24px, not 64. At 64 the band was taller than a section heading and its
+   counter together, so it swallowed both whole and reported a live, clickable
+   group as switched off. At 24px the ramp is short enough that most of any line
+   is still at full ink, and the 94% floor above means even the deepest pixel of
+   the ramp cannot cost a reader a word. */
+.modal-body.is-scrollable:not(.at-bottom) {
+  --fade-bottom: 24px;
+}
+
+.modal-body.is-scrollable:not(.at-top) {
+  --fade-top: 18px;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 11px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--scroll-thumb);
+  background-clip: content-box;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover);
+  background-clip: content-box;
+}
+
+/* The two folds. With the fade held to 6% it can no longer be the thing that
+   says "there is more" - so the saying is done here, by an edge instead of by
+   the words. A hairline landing exactly on the rule the content passes under,
+   and a short shade rising off it, which together read as a lip rather than as
+   a cut. Neither one touches a glyph: the hairline sits on a border the panel
+   already draws, and the shade is 14px of the very bottom of the scroll box.
+
+   modal.js writes --head-h and --foot-h from real offsets, so these land on the
+   right pixel when the tray wraps and when sheet mode adds a grab handle.
+   Decoration: aria-hidden, pointer-transparent, never a focus stop. */
+.modal-edge {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  z-index: 3;
+  height: 14px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+
+/* Offset by the one pixel of the rule itself, so this replaces the resting
+   hairline rather than stacking a second line beside it. */
+.modal-edge-top {
+  top: calc(var(--head-h, 0px) - 1px);
+  border-top: 1px solid var(--fold-line);
+  background: linear-gradient(180deg, var(--fold-shade), transparent);
+  box-shadow: 0 -1px 0 var(--hairline-light);
+}
+
+.modal-edge-bottom {
+  bottom: calc(var(--foot-h, 0px) - 1px);
+  border-bottom: 1px solid var(--fold-line);
+  background: linear-gradient(0deg, var(--fold-shade), transparent);
+  box-shadow: 0 1px 0 var(--hairline-light);
+}
+
+/* Same state, same source of truth, same moment as the chevron. */
+.modal:has(> .modal-body.is-scrollable:not(.at-top)) > .modal-edge-top,
+.modal:has(> .modal-body.is-scrollable:not(.at-bottom)) > .modal-edge-bottom {
+  opacity: 1;
+}
+
+/* A fade says "there is more" only to someone who already knows the trick, and
+   on a touch screen there is no scrollbar to say it at all. So the fold also
+   carries a chevron, straddling the footer rule where the reader is already
+   looking. Decoration: aria-hidden and pointer-transparent, so it adds nothing
+   to the tab order and the focus trap keeps exactly the stops it had.
+   modal.js writes --foot-h from the real footer height. */
+.modal-more {
+  position: absolute;
+  left: 50%;
+  bottom: var(--foot-h, 0px);
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  translate: -50% 50%;
+  border: 1px solid var(--btn-rim-outer);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, var(--btn-face-1), var(--btn-face-2));
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-2);
+  color: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+
+.modal-more .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.modal:has(> .modal-body.is-scrollable:not(.at-bottom)) > .modal-more {
+  opacity: 1;
+}
+
+/* One footer, everywhere.
+     - one padding                        (--modal-pad, matching head and body)
+     - one order: secondary then primary, primary always rightmost
+     - one close affordance: the header X. No second close glyph down here.
+     - the far-left slot is for the odd one out (a destructive action, the
+       lesson dots), so it never sits shoulder to shoulder with the primary. */
+.modal-foot {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-4) var(--modal-pad);
+  border-top: 1px solid var(--hairline);
+  background: var(--panel-tray);
+  box-shadow: inset 0 1px 0 var(--hairline-light);
+}
+
+.modal-foot[hidden] {
+  display: none;
+}
+
+.modal-foot-extra {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Nothing in the left slot means the actions get the whole tray, rather than
+   losing half of it to a spacer and having to wrap. */
+.modal-foot-extra:empty {
+  flex: 0 0 0;
+  display: none;
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+/* A footer button is a button. A bare word next to a glossy pill reads as a
+   caption, so every secondary in a tray gets its own quiet capsule. */
+.modal-foot .btn-ghost:not([disabled]) {
+  border-color: var(--btn-rim-outer);
+  background-color: color-mix(in srgb, var(--glass-highlight) 45%, transparent);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-highlight) 55%, transparent) 0%,
+    transparent 100%
+  );
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-1);
+}
+
+.modal-foot .btn-ghost:is(:hover, .is-hover):not([disabled]) {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background-color: var(--btn-ghost-hover);
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-2);
+}
+
+/* aero.css dims a disabled control to 0.55 opacity on top of a 50% ink, which
+   lands at 1.5:1. Inert has to stay readable. */
+.modal-actions .btn[disabled] {
+  color: var(--text-muted);
+  opacity: 1;
+  filter: none;
+  border-color: var(--hairline);
+  background-color: color-mix(in srgb, var(--glass-highlight) 18%, transparent);
+  background-image: none;
+  box-shadow: inset 0 1px 0 var(--hairline-light);
+}
+
+.modal-actions .btn[disabled] .icon {
+  opacity: 0.6;
+}
+
+.modal-message {
+  margin: 0;
+  font-size: var(--fs-md);
+  line-height: var(--lh-body);
+  color: var(--text);
+}
+
+.modal-body .muted {
+  color: var(--text-muted);
+}
+
+/* The finish button on the last lesson slide earns a halo. */
+.modal-lesson .btn.is-finish {
+  box-shadow:
+    inset 0 1px 0 var(--btn-primary-rim),
+    var(--shadow-2),
+    var(--glow-strong);
+}
+
+/* ==========================================================================
+   4. Prose (lesson slides, help copy, string bodies)
+   ========================================================================== */
+
+/* 62ch of the "0" glyph lands at roughly 66 characters of running prose, which
+   is the comfortable end of the 62-70 measure.
+
+   The measure is CENTRED, never flush left inside a much wider box: a column
+   of text pinned to the left rule of a panel twice its width just advertises
+   the empty half. Anything that draws a full-width rule (a section underline,
+   a table border) is held to the same column so the rule stops where the words
+   stop. */
+.modal-body > p,
+.modal-body > ul,
+.modal-body > ol,
+.modal-body > pre,
+.modal-body > blockquote,
+.prose {
+  max-width: min(var(--modal-measure), 100%);
+  margin-inline: auto;
+}
+
+.prose,
+.modal-body {
+  font-size: var(--fs-md);
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.prose > *:first-child,
+.modal-body > *:first-child {
+  margin-top: 0;
+}
+
+.prose > *:last-child,
+.modal-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.modal-body h3,
+.modal-body h4 {
+  margin: var(--space-5) 0 var(--space-2);
+  color: var(--text-strong);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.prose h1 { font-size: var(--fs-2xl); }
+.prose h2 { font-size: var(--fs-xl); }
+
+.prose h3,
+.modal-body h3 { font-size: var(--fs-lg); }
+
+.prose h4,
+.modal-body h4 {
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-muted);
+}
+
+.prose p,
+.modal-body p {
+  margin: 0 0 var(--space-4);
+}
+
+/* :where() so this carries no specificity at all: it is the default for a list
+   that markdown produced, and any list with a class of its own - the rebase
+   todo, the help points - simply states its own box without a fight. The old
+   version won those fights and left the rebase list with 24px on one side and
+   nothing on the other. */
+:where(.prose, .modal-body) :where(ul, ol) {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-5);
+}
+
+.prose li,
+.modal-body li {
+  margin: 0 0 var(--space-2);
+}
+
+.prose li::marker,
+.modal-body li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.prose a,
+.modal-body a {
+  color: var(--link);
+  text-underline-offset: 3px;
+}
+
+.prose strong,
+.modal-body strong {
+  color: var(--text-strong);
+}
+
+.prose code,
+.modal-body code,
+.help code {
+  padding: 0.1em 0.42em;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--sky-2) 62%, transparent);
+  box-shadow: inset 0 1px 0 var(--hairline-light);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  color: var(--text-strong);
+}
+
+/* Inline code is a pill, and half a pill is not a pill.
+   Lesson prose is dense with short tokens - `-f`, `~`, `^2`, `o/main`, `HEAD` -
+   and a hyphen is an ordinary line-break opportunity in running text, so "-f"
+   came out as a "-" pill at the end of one line and an "f" pill at the start of
+   the next. Neither `overflow-wrap` nor `word-break` prevents that; only taking
+   the break opportunities away does. So an inline pill never breaks inside
+   itself - it moves to the next line whole. `pre code` is deliberately excluded
+   here so a fenced block keeps its own `white-space: pre`. */
+.prose code:not(:where(pre code)),
+.modal-body code:not(:where(pre code)),
+.help code:not(:where(pre code)) {
+  white-space: nowrap;
+}
+
+/* A command string is many short words, so it wraps between them like any other
+   phrase. The first column of the help table is a hard 34% of the panel, and
+   `git rebase --onto <new> <old> <branch>` cannot be held on one line inside it
+   at 320px - it used to run under the panel's own edge, where nothing can
+   scroll it back into view. */
+.help-table th code {
+  white-space: normal;
+}
+
+html[data-theme='dusk'] .prose code:not(:where(pre code)),
+html[data-theme='dusk'] .modal-body code:not(:where(pre code)),
+html[data-theme='dusk'] .help code:not(:where(pre code)) {
+  background: color-mix(in srgb, var(--deep-1) 70%, transparent);
+}
+
+.prose pre,
+.modal-body pre {
+  position: relative;
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  padding-right: var(--space-8);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--well-bg);
+  box-shadow:
+    inset 0 2px 6px -3px var(--btn-inner-shadow),
+    0 1px 0 var(--hairline-light);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+.prose pre code,
+.modal-body pre code {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  white-space: pre;
+  color: var(--text-strong);
+}
+
+.prose blockquote,
+.modal-body blockquote {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--accent-2) 28%, transparent);
+  border-left: 3px solid var(--accent-2);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--aqua-1) 26%, transparent),
+    color-mix(in srgb, var(--aqua-1) 12%, transparent)
+  );
+  box-shadow: inset 0 1px 0 var(--hairline-light);
+  color: var(--text-strong);
+}
+
+.prose blockquote p:last-child,
+.modal-body blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+}
+
+.prose hr {
+  margin: var(--space-5) 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  box-shadow: 0 1px 0 var(--hairline-light);
+}
+
+.code-copy {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px var(--space-2);
+  border: 1px solid var(--btn-rim-outer);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, var(--btn-face-1), var(--btn-face-2));
+  box-shadow: inset 0 1px 0 var(--btn-rim);
+  color: var(--text-muted);
+  font: 600 var(--fs-xs) / 1 var(--font-ui);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
+
+.prose pre:hover .code-copy,
+.prose pre:focus-within .code-copy,
+.code-copy:focus-visible {
+  opacity: 1;
+}
+
+.code-copy:hover {
+  color: var(--text-strong);
+}
+
+.code-copy .icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* ==========================================================================
+   5. Lesson dialog
+   ========================================================================== */
+
+/* The lesson is a text-only panel, so the panel is the measure: narrowing it
+   to the column is honest, where an 840px box holding a 540px column is not. */
+.modal-lesson {
+  --modal-w: 620px;
+  --modal-measure: 68ch;
+  --modal-pad: var(--space-6);
+}
+
+/* --text-muted is a hair under 4.5:1 against the composited dusk header, and
+   this line is on the first screen of the course. */
+.lesson-step {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.lesson-viewport {
+  overflow: hidden;
+}
+
+.lesson-content {
+  transition:
+    transform var(--dur-2) var(--ease-out),
+    opacity var(--dur-1) linear;
+}
+
+.lesson-content.slide-out-left {
+  transform: translate3d(-26px, 0, 0);
+  opacity: 0;
+}
+
+.lesson-content.slide-out-right {
+  transform: translate3d(26px, 0, 0);
+  opacity: 0;
+}
+
+.lesson-content.slide-in-right {
+  transform: translate3d(26px, 0, 0);
+  opacity: 0;
+  transition: none;
+}
+
+.lesson-content.slide-in-left {
+  transform: translate3d(-26px, 0, 0);
+  opacity: 0;
+  transition: none;
+}
+
+/* The demo card is the one obviously interactive thing on a slide. */
+.lesson-demo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: min(var(--modal-measure), 100%);
+  margin: var(--space-5) auto 0;
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-highlight) 60%, transparent) 0%,
+    color-mix(in srgb, var(--aqua-1) 30%, transparent) 45%,
+    color-mix(in srgb, var(--sky-3) 34%, transparent) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 var(--glass-border-strong),
+    var(--shadow-2),
+    0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.lesson-demo-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-strong);
+}
+
+.lesson-demo-head .icon {
+  width: 15px;
+  height: 15px;
+  color: var(--accent);
+}
+
+.lesson-cmd {
+  flex: 1 1 240px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sky-1) 88%, transparent);
+  box-shadow: inset 0 2px 5px -3px var(--btn-inner-shadow);
+}
+
+html[data-theme='dusk'] .lesson-cmd {
+  background: color-mix(in srgb, var(--deep-1) 78%, transparent);
+}
+
+.lesson-cmd-mark {
+  color: var(--accent-2);
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.lesson-cmd code {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-size: var(--fs-md);
+  color: var(--text-strong);
+  overflow-x: auto;
+}
+
+.lesson-try {
+  flex: 0 0 auto;
+}
+
+.lesson-dots {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* A near-white dot on a pale tray is not a dot. These carry their own ink so
+   they read on the day footer as well as the dusk one. */
+.lesson-dot {
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 78%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  box-shadow:
+    inset 0 1px 0 var(--hairline-light),
+    var(--shadow-1);
+  cursor: pointer;
+  transition:
+    transform var(--dur-1) var(--ease-spring),
+    background var(--dur-1) var(--ease-out),
+    width var(--dur-2) var(--ease-out);
+}
+
+.lesson-dot:hover {
+  transform: scale(1.25);
+}
+
+.lesson-dot.is-done {
+  background: color-mix(in srgb, var(--accent) 72%, transparent);
+}
+
+.lesson-dot.is-current {
+  width: 28px;
+  background: linear-gradient(180deg, var(--btn-primary-1), var(--btn-primary-2));
+  border-color: var(--btn-primary-rim-outer);
+  box-shadow:
+    inset 0 1px 0 var(--btn-primary-rim),
+    var(--glow);
+}
+
+/* ==========================================================================
+   6. Level browser
+   ========================================================================== */
+
+.levels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: none;
+}
+
+.levels-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.levels-search {
+  position: relative;
+  flex: 1 1 240px;
+  display: flex;
+  align-items: center;
+}
+
+.levels-search-icon {
+  position: absolute;
+  left: var(--space-3);
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.levels-search-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 var(--space-4) 0 calc(var(--space-3) * 2 + 16px);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--sky-1) 82%, transparent);
+  color: var(--text-strong);
+  font: 500 var(--fs-sm) / 1 var(--font-ui);
+  box-shadow:
+    inset 0 2px 6px -3px var(--btn-inner-shadow),
+    0 1px 0 var(--hairline-light);
+}
+
+html[data-theme='dusk'] .levels-search-input {
+  background: color-mix(in srgb, var(--deep-1) 72%, transparent);
+}
+
+.levels-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.levels-search-input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+.levels-meter {
+  flex: 0 1 230px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.meter-text {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.meter {
+  height: 9px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--well-bg);
+  box-shadow: inset 0 1px 3px -1px var(--btn-inner-shadow);
+  overflow: hidden;
+}
+
+.meter-fill {
+  display: block;
+  width: var(--p, 0%);
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--aqua-2), var(--accent));
+  box-shadow:
+    inset 0 1px 0 var(--glass-border-strong),
+    var(--glow);
+  transition: width var(--dur-3) var(--ease-out);
+}
+
+.levels-tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--hairline);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.levels-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: 600 var(--fs-sm) / 1 var(--font-ui);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--dur-1) var(--ease-out),
+    background var(--dur-1) var(--ease-out);
+}
+
+.levels-tab .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.levels-tab:hover {
+  color: var(--text-strong);
+  background: var(--btn-ghost-hover);
+}
+
+.levels-tab.is-active {
+  color: var(--text-strong);
+  border-color: var(--hairline);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-highlight) 75%, transparent),
+    color-mix(in srgb, var(--sky-2) 45%, transparent)
+  );
+  box-shadow:
+    inset 0 1px 0 var(--glass-border-strong),
+    0 -1px 6px -2px var(--btn-inner-shadow);
+}
+
+.levels-tab-count {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--info-tint);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.levels-list {
+  display: grid;
+  gap: var(--space-4);
+  outline: none;
+}
+
+/* Three surfaces, three jobs: the panel is the sheet, a sequence is a tray sunk
+   INTO it, and a level chip is a control sitting ON the tray. They used to be
+   three near-identical panes about 4% apart in luminance, which is no hierarchy
+   at all - so the tray now goes down (a recessed well, darker than the panel)
+   and the chips stay up (near-white, lit from the top). */
+.seq-card {
+  position: relative;
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--sky-4) 24%, transparent);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sky-3) 34%, transparent) 0%,
+    color-mix(in srgb, var(--sky-3) 20%, transparent) 100%
+  );
+  box-shadow:
+    inset 0 3px 10px -6px var(--btn-inner-shadow),
+    0 1px 0 var(--hairline-light);
+}
+
+html[data-theme='dusk'] .seq-card {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--deep-1) 55%, transparent) 0%,
+    color-mix(in srgb, var(--deep-1) 34%, transparent) 100%
+  );
+}
+
+.seq-head {
+  margin-bottom: var(--space-3);
+}
+
+/* Title and counter share one baseline row. The pill used to be a flex sibling
+   of the whole text block, which floated it a line-height above the heading's
+   cap line with nothing to sit on. */
+.seq-head-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.seq-name {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-strong);
+}
+
+.seq-about {
+  margin: var(--space-1) 0 0;
+  max-width: 76ch;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.seq-count {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px var(--space-3);
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+  background: var(--pill-bg);
+  box-shadow: inset 0 1px 0 var(--hairline-light);
+  font: 700 var(--fs-xs) / 1.4 var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.seq-count.is-complete {
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+  background: var(--ok-tint);
+  color: var(--text-strong);
+}
+
+.seq-count .icon {
+  width: 13px;
+  height: 13px;
+  color: var(--ok);
+}
+
+/* One rhythm down the whole list.
+   Letting each group choose its own column count - the widest that divided its
+   own length - made every card a different shape: three sequences of 4 rendered
+   4-up in 258px cells, two sequences of 5 rendered 3-up in 347px cells with a
+   hole in row 2, and the two-level sandbox rendered 2-up in 524px cells. Read
+   down the page, the cards had nothing in common. The count now comes from the
+   VIEWPORT, not from the group, so every chip in the browser is the same size as
+   every other chip, and the tail of an odd group centres under its own row
+   instead of hanging off the left.
+
+   Flex, not grid, precisely for that centring: an auto-fill track grid can only
+   leave the hole on the right. The basis is the exact share of a row, less a
+   half pixel so a rounded-up track never wraps a full row early. */
+.seq-chips {
+  --cols: 4;
+
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* One step per breakpoint, widest first. Four is what the 1140px panel was
+   drawn for. Below that the panel narrows faster than a chip can, and the step
+   down happens at the width where a cell would stop holding a two-line level
+   name - which is what used to clamp "Rescuing one commit from a..." into half
+   a title on a tablet. */
+@media (max-width: 1023px) {
+  .seq-chips {
+    --cols: 3;
+  }
+}
+
+@media (max-width: 899px) {
+  .seq-chips {
+    --cols: 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .seq-chips {
+    --cols: 1;
+  }
+}
+
+/* The rim, and why it is not --btn-rim-outer any more.
+   That token is a 32%-alpha ink, and a border paints over the element's OWN
+   background - so on a chip whose face is near-white it composited to a pale
+   blue-grey and then had to be seen against the tray behind it. Measured off
+   the render at 1440x900, the day chip's rim came out #97bdd2 against a card of
+   #8fd7f5: 1.03:1. That is not a low-contrast border, it is no border - the
+   chip and its container met with nothing between them, and the only reason a
+   chip looked like a chip at all was its own drop shadow.
+
+   The ink is the panel's own --text-strong instead, so it flips with the theme
+   for free: a dark rim on day glass, a light one on dusk glass, no second rule.
+   70% is where the day measurement clears the 3:1 that a non-text boundary owes
+   with room to spare - 60% landed on exactly 3.00:1, which is not a margin.
+
+   Measured off the render, day / dusk:  rim vs card 3.96:1 / 8.99:1,  rim vs
+   chip face 5.48:1 / 6.59:1. Both sides of the edge, because a boundary that
+   only reads against one of the surfaces it separates is half an edge. (The
+   day figure wanders a hundredth either way between runs - the sky behind the
+   panel is animated and the glass is only frosted, not opaque.)
+
+   Hover and current mix the accent INTO that ink rather than replacing it, and
+   land at 4.06:1 / 10.10:1. They used to set the border to plain --accent,
+   which is 2.78:1 against the card, and on hover to --accent at 60% ALPHA,
+   which was paler than the resting rim: touching a chip rubbed out the edge it
+   had at rest. */
+.level-chip {
+  --chip-rim: color-mix(in srgb, var(--text-strong) 70%, transparent);
+  --chip-rim-live: color-mix(in srgb, var(--accent) 70%, var(--text-strong));
+
+  flex: 0 0 calc((100% - (var(--cols) - 1) * var(--space-2)) / var(--cols) - 0.5px);
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 54px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--chip-rim);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, var(--btn-face-1) 0%, var(--btn-face-2) 100%);
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-1);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
+}
+
+.level-chip:hover {
+  transform: translateY(-2px);
+  border-color: var(--chip-rim-live);
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-3),
+    var(--glow);
+}
+
+/* Same accented rim as a hovered chip - the 2px halo below is what makes this
+   one the current level, and it is the only chip in the list that has it. A
+   pointer can only hover one chip at a time anyway, and a keyboard reader never
+   sees hover at all. */
+.level-chip.is-current {
+  border-color: var(--chip-rim-live);
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-2),
+    0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.chip-num {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--commit-stroke);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, var(--commit-fill), var(--commit-fill-2));
+  box-shadow: inset 0 1px 0 var(--glass-border-strong);
+  font: 700 var(--fs-xs) / 1 var(--font-mono);
+  color: var(--commit-text);
+}
+
+.level-chip.is-solved .chip-num {
+  border-color: color-mix(in srgb, var(--leaf-3) 65%, transparent);
+  background: linear-gradient(180deg, var(--leaf-1), var(--leaf-2));
+  color: var(--commit-text);
+}
+
+.chip-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Three lines before an ellipsis. "Rebasing instead of mer..." told the reader
+   nothing; two lines fixed that while the cells were 347px wide, but a fixed
+   four-column rhythm puts the longest name in the course - "Rescuing one commit
+   from a branch nobody will merge" - into a 258px cell, where it wants three.
+   The row equalises around whichever chip is tallest, so a name that needs the
+   third line costs nothing to the ones that do not. */
+.chip-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-strong);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.chip-meta {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.chip-state {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+}
+
+/* An unsolved chip has no tick to show, and an empty 20px box plus its gap was
+   taking 32px off the one thing the cell is for. Reclaimed, the narrowest cell
+   in the browser gains most of a word per line. */
+.chip-state:empty {
+  display: none;
+}
+
+/* The tightest four-column cell in the range: at a 1024px window the panel is
+   990px and a cell is 221px, and that is the one place where a SOLVED chip's
+   tick and the longest name in the course - "Rescuing one commit from a branch
+   nobody will merge" - have to share it. Give the name the chip's own chrome
+   back, and let it take a fourth line if it still needs one. Both are cheaper
+   than the alternatives: dropping to three columns here would break the one
+   rhythm this pass exists to establish, and an ellipsis on a level title tells
+   the reader nothing at all. The row equalises around the tallest chip anyway.
+
+   This block sits AFTER .level-chip and .chip-name on purpose. Media queries
+   carry no extra specificity, so written above them it lost every declaration
+   to the base rule and silently did nothing. */
+@media (min-width: 1024px) and (max-width: 1160px) {
+  .level-chip {
+    gap: var(--space-2);
+    padding-inline: var(--space-2);
+  }
+
+  .chip-name {
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+  }
+}
+
+.chip-state .icon {
+  width: 18px;
+  height: 18px;
+  color: var(--leaf-3);
+}
+
+.chip-state .icon.is-par {
+  color: var(--warn);
+}
+
+/* Destructive, so it carries danger ink and lives at the far left of the tray,
+   as far from the primary as the footer allows. It never outshouts the list. */
+.modal-foot .levels-reset,
+.modal-foot .levels-reset .icon {
+  color: var(--danger);
+}
+
+.modal-foot .levels-reset {
+  border-color: color-mix(in srgb, var(--danger) 32%, transparent);
+  background-image: none;
+}
+
+.modal-foot .levels-reset:is(:hover, .is-hover):not([disabled]) {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  background-color: var(--danger-tint);
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-1);
+}
+
+.levels-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-7) var(--space-4);
+  border: 1px dashed var(--glass-border-strong);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--glass-highlight) 30%, transparent);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.levels-empty p {
+  margin: 0;
+  max-width: 46ch;
+}
+
+.levels-empty-icon {
+  width: 30px;
+  height: 30px;
+  opacity: 0.55;
+}
+
+/* ==========================================================================
+   6b. Interactive rebase panel
+   ========================================================================== */
+
+/* A rebase row carries four small things. Across a 580px panel they ended up
+   spread so far apart that the row read as two fragments with a hole between
+   them, so the panel itself comes in to meet the content. */
+.modal-rebase {
+  --modal-w: 500px;
+}
+
+.rebase {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: none;
+}
+
+.rebase-intro {
+  margin: 0;
+  max-width: min(var(--modal-measure), 100%);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.rebase-intro code {
+  font-size: 0.92em;
+}
+
+/* Symmetric. The generic list rule used to win here and leave 24px on the left
+   and nothing on the right, so the rows hung out of their own well.
+   The well is also a real well: --well-bg alone put it about 4% off the panel
+   behind it and the rows about 4% off that, which is not enough to tell three
+   surfaces apart. */
+.rebase .rebase-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2);
+  list-style: none;
+  border: 1px solid color-mix(in srgb, var(--sky-4) 24%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--sky-3) 30%, transparent);
+  box-shadow:
+    inset 0 3px 10px -6px var(--btn-inner-shadow),
+    0 1px 0 var(--hairline-light);
+}
+
+html[data-theme='dusk'] .rebase .rebase-list {
+  background: color-mix(in srgb, var(--deep-1) 52%, transparent);
+}
+
+.rebase-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto auto 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--btn-rim-outer);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, var(--btn-face-1) 0%, var(--btn-face-2) 100%);
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-1);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.rebase-list.is-reordering .rebase-row:not(.is-dragging) {
+  transition: transform var(--dur-2) var(--ease-out);
+}
+
+.rebase-row.is-dragging {
+  z-index: 2;
+  cursor: grabbing;
+  transition: none !important;
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-3),
+    var(--glow);
+}
+
+/* Dropped rows stay in place so they can come back. Marked four ways -
+   hatching, strike-through, the word "Dropped" and a different glyph - so the
+   state never depends on colour alone. */
+.rebase-row.is-dropped {
+  background-image:
+    repeating-linear-gradient(
+      135deg,
+      var(--hairline) 0 2px,
+      transparent 2px 9px
+    ),
+    linear-gradient(180deg, var(--btn-face-2) 0%, var(--btn-face-2) 100%);
+  box-shadow: inset 0 1px 0 var(--hairline-light);
+}
+
+.rebase-row.is-dropped .rebase-id {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  color: var(--text-muted);
+}
+
+.rebase-row.is-dropped .rebase-pos,
+.rebase-row.is-dropped .rebase-grip {
+  opacity: 0.5;
+}
+
+.rebase-grip {
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+
+.rebase-grip .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.rebase-pos {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--pill-bg);
+  font: 700 var(--fs-xs) / 1 var(--font-mono);
+  color: var(--text-muted);
+}
+
+.rebase-id {
+  justify-self: start;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--commit-stroke);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--commit-fill), var(--commit-fill-2));
+  box-shadow: inset 0 1px 0 var(--glass-border-strong);
+  font: 700 var(--fs-sm) / 1.5 var(--font-mono);
+  color: var(--commit-text);
+}
+
+/* Real `git rebase -i` writes `pick` and `drop` in a todo file. Those are the
+   words on the row, in the mono face they will be seen in later.
+   Left-aligned, hard against the commit id it describes. Pushed to the right it
+   left a 150px hole in the middle of every row, and the plain-English gloss that
+   filled the hole said "replayed onto the new base" on every picked row - four
+   identical sentences that the summary line underneath already makes once. The
+   gloss now appears only where it earns its place: on a row that has been
+   dropped. */
+.rebase-op {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* `pick` and `drop` are both four characters, but the box is pinned anyway so
+   toggling a row cannot shift the words either side of it. */
+.rebase-verb {
+  flex: 0 0 auto;
+  min-width: 5.5ch;
+  text-align: center;
+  padding: 2px var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  font: 700 var(--fs-sm) / 1.5 var(--font-mono);
+  color: var(--text-strong);
+}
+
+.rebase-row.is-dropped .rebase-verb {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  background: var(--danger-tint);
+}
+
+.rebase-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+/* Wet capsule, in the app's own accent rather than a fifth hue of its own. */
+.rebase-keep {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--btn-primary-rim-outer);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    180deg,
+    var(--btn-primary-1) 0%,
+    var(--btn-primary-1) 48%,
+    var(--btn-primary-2) 52%,
+    var(--btn-primary-2) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 var(--btn-primary-rim),
+    var(--shadow-1);
+  color: var(--btn-primary-text);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+/* The specular cap that makes every other control on the page look wet. */
+.rebase-keep::before {
+  content: '';
+  position: absolute;
+  inset: 1px 1px auto;
+  z-index: -1;
+  height: 52%;
+  border-radius: var(--radius-pill) var(--radius-pill) 50% 50% / 100% 100% 60% 60%;
+  background: linear-gradient(
+    180deg,
+    var(--btn-primary-gloss) 0%,
+    color-mix(in srgb, var(--btn-primary-gloss) 20%, transparent) 100%
+  );
+  pointer-events: none;
+}
+
+.rebase-keep:hover {
+  box-shadow:
+    inset 0 1px 0 var(--btn-primary-rim),
+    var(--shadow-2),
+    var(--glow);
+}
+
+.rebase-keep .icon {
+  width: 17px;
+  height: 17px;
+  grid-area: 1 / 1;
+}
+
+.rebase-keep .rebase-keep-off,
+.rebase-keep[aria-checked='false'] .rebase-keep-on {
+  display: none;
+}
+
+.rebase-keep[aria-checked='false'] {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  background: var(--danger-tint);
+  box-shadow: inset 0 1px 0 var(--hairline-light);
+}
+
+.rebase-keep[aria-checked='false']::before {
+  display: none;
+}
+
+.rebase-keep[aria-checked='false'] .rebase-keep-off {
+  display: block;
+}
+
+.rebase-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  max-width: 62ch;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.rebase-hint .icon {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+}
+
+.rebase-summary {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--info-tint);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.rebase-summary.is-partial {
+  border-color: color-mix(in srgb, var(--amber-1) 70%, transparent);
+  background: color-mix(in srgb, var(--amber-1) 24%, transparent);
+}
+
+/* ==========================================================================
+   6c. Victory panel
+
+   The one screen in the app that exists purely to feel like something. It was
+   the flattest: a heading the same size as "Help", two bare words for the
+   secondaries and a primary so pale it read as disabled. Now it is aqua, wet
+   and lit, it names what you did and what comes next, and it shows how far
+   through the course you are.
+   ========================================================================== */
+
+.modal-victory {
+  --victory-bloom: color-mix(in srgb, var(--aqua-1) 62%, transparent);
+  --panel-top: color-mix(in srgb, var(--aqua-1) 34%, var(--sky-1));
+  --panel-mid: color-mix(in srgb, var(--sky-1) 90%, transparent);
+  --panel-bottom: color-mix(in srgb, var(--sky-2) 88%, transparent);
+
+  box-shadow:
+    var(--shadow-4),
+    0 30px 90px -30px color-mix(in srgb, var(--accent-2) 70%, transparent),
+    0 0 0 1px var(--hairline);
+}
+
+html[data-theme='dusk'] .modal-victory {
+  /* The dark theme puts light ink on this bloom, so the bloom has to be the
+     dark end of the aqua pair or the eyebrow lands at 3:1. */
+  --victory-bloom: color-mix(in srgb, var(--aqua-2) 52%, transparent);
+  --panel-top: color-mix(in srgb, var(--aqua-2) 42%, var(--sky-2));
+  --panel-mid: color-mix(in srgb, var(--sky-1) 94%, transparent);
+  --panel-bottom: color-mix(in srgb, var(--deep-1) 86%, transparent);
+}
+
+.modal-victory .modal-head {
+  border-bottom-color: transparent;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-highlight) 70%, transparent),
+    transparent
+  );
+}
+
+.modal-victory .modal-title {
+  font-size: var(--fs-3xl);
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+  text-shadow:
+    0 1px 0 var(--glass-border-strong),
+    0 0 26px color-mix(in srgb, var(--aqua-1) 85%, transparent);
+}
+
+/* Until the host swaps to victoryModal(), a plain paragraph body still gets the
+   bloom and the centre line - it just has no badge, stats or progress to show.
+   The rule retires itself the moment the real structure arrives. */
+.modal-victory .modal-body:not(:has(.victory)) {
+  text-align: center;
+}
+
+.modal-victory .modal-body:not(:has(.victory))::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  /* Same rule as the burst: decoration stops at the card's edges. */
+  inset: -10% 0 auto;
+  height: 70%;
+  pointer-events: none;
+  background: radial-gradient(46% 60% at 50% 30%, var(--victory-bloom), transparent 72%);
+}
+
+.victory {
+  position: relative;
+  /* The bloom is positioned, its siblings are not, so without a stacking
+     context of its own it painted over its own eyebrow and washed it down to
+     3:1. Everything decorative now lives strictly behind the words. */
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 100%;
+  padding-top: var(--space-2);
+  text-align: center;
+}
+
+/* --- the bloom and the bubbles rising through it ------------------------- */
+
+/* Held to the top of the panel on purpose. It used to run the full height, so a
+   bubble in flight - or a parked one, once reduced motion stopped the
+   animation - sat on the progress meter looking exactly like a broken slider
+   thumb. Nothing decorative now reaches the numbers or the track. */
+/* Bled to the card's own edges and no further. At -22% the box ran 92px past
+   each side of a 580px panel, so b1 was laid out at x=406 and b6 at x=1036 with
+   the card spanning 430 to 1010: two bubbles living outside the glass, kept off
+   screen only by the scroll box's overflow. One change to that overflow and
+   they were specks on the backdrop. Now the widest the decoration can reach is
+   the card, and the overflow below is a second lock rather than the only one. */
+.victory-burst {
+  position: absolute;
+  z-index: -1;
+  inset: 0 calc(var(--modal-pad) * -1) auto;
+  height: 54%;
+  pointer-events: none;
+  overflow: hidden;
+  /* Centred on the badge, not on the words underneath it. */
+  background: radial-gradient(
+    46% 44% at 50% 26%,
+    var(--victory-bloom),
+    transparent 74%
+  );
+}
+
+/* The white bubble tokens are tuned for the deep water behind the app; on a
+   pale glass panel they disappear, so these carry the accent instead. */
+.victory-bubble {
+  position: absolute;
+  bottom: -8%;
+  display: block;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--accent-2) 78%, transparent);
+  background:
+    radial-gradient(40% 36% at 32% 26%, var(--glass-highlight), transparent 66%),
+    color-mix(in srgb, var(--aqua-1) 30%, transparent);
+  box-shadow:
+    inset 0 -2px 4px -2px color-mix(in srgb, var(--accent-2) 55%, transparent),
+    0 0 10px -2px color-mix(in srgb, var(--aqua-1) 80%, transparent);
+  opacity: 0;
+  animation: victory-rise 5.2s var(--ease-out) infinite;
+}
+
+/* Negative delays, so the column is already in flight the moment the panel
+   opens rather than starting from an empty screen. */
+.victory-bubble.b1 { left: 8%;  width: 17px; height: 17px; animation-delay: -0.5s; }
+.victory-bubble.b2 { left: 23%; width: 10px; height: 10px; animation-delay: -2.4s; }
+.victory-bubble.b3 { left: 39%; width: 24px; height: 24px; animation-delay: -3.7s; }
+.victory-bubble.b4 { left: 61%; width: 13px; height: 13px; animation-delay: -1.3s; }
+.victory-bubble.b5 { left: 77%; width: 20px; height: 20px; animation-delay: -4.6s; }
+.victory-bubble.b6 { left: 91%; width: 9px;  height: 9px;  animation-delay: -3.0s; }
+
+/* The travel is the height of the burst box, not the height of the panel, so a
+   bubble spends its whole life inside the bloom it belongs to. */
+@keyframes victory-rise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.7);
+  }
+  18% {
+    opacity: 0.95;
+  }
+  62% {
+    opacity: 0.6;
+  }
+  /* Gone before it reaches the ceiling of the burst box, so nothing is ever
+     cut in half by the edge that clips it. */
+  100% {
+    opacity: 0;
+    transform: translate3d(8px, -150px, 0) scale(1.1);
+  }
+}
+
+/* --- the badge ----------------------------------------------------------- */
+
+.victory-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border: 1px solid var(--btn-primary-rim-outer);
+  border-radius: var(--radius-pill);
+  background: radial-gradient(
+    72% 64% at 34% 24%,
+    var(--glass-highlight) 0%,
+    var(--aqua-1) 38%,
+    var(--aqua-2) 100%
+  );
+  box-shadow:
+    inset 0 2px 0 var(--btn-primary-rim),
+    inset 0 -8px 14px -8px var(--btn-inner-shadow),
+    var(--shadow-2),
+    var(--glow-strong);
+  color: var(--text-strong);
+}
+
+.victory-mark .icon {
+  width: 30px;
+  height: 30px;
+}
+
+.victory-eyebrow {
+  margin: var(--space-1) 0 calc(var(--space-3) * -1 + var(--space-1));
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.victory-level {
+  margin: 0;
+  max-width: 100%;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+/* --- the numbers --------------------------------------------------------- */
+
+.victory-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.victory-stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-highlight) 78%, transparent),
+    color-mix(in srgb, var(--sky-2) 42%, transparent)
+  );
+  box-shadow:
+    inset 0 1px 0 var(--glass-border-strong),
+    var(--shadow-1);
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.victory-stat b {
+  font: 700 var(--fs-xl) / 1 var(--font-mono);
+  color: var(--text-strong);
+}
+
+.victory-stat.is-par {
+  border-color: color-mix(in srgb, var(--accent-2) 60%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-highlight) 70%, transparent),
+    color-mix(in srgb, var(--aqua-1) 45%, transparent)
+  );
+  box-shadow:
+    inset 0 1px 0 var(--glass-border-strong),
+    var(--shadow-1),
+    var(--glow);
+}
+
+.victory-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  max-width: 46ch;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.victory-note .icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--accent-2);
+}
+
+/* --- how far through the course ----------------------------------------- */
+
+.victory-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(320px, 100%);
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--hairline);
+  box-shadow: 0 -1px 0 var(--hairline-light);
+}
+
+.victory-progress-text {
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+/* --- the footer ---------------------------------------------------------- */
+
+.modal-victory .modal-actions {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+.modal-victory .modal-actions .btn-primary {
+  flex: 0 1 auto;
+  min-width: 0;
+  /* Extra gloss and a real bloom: at rest it was pale enough to read as an
+     inert control, which is the opposite of what this button is for. */
+  box-shadow:
+    inset 0 1px 0 var(--btn-primary-rim),
+    inset 0 -10px 16px -12px var(--btn-inner-shadow),
+    var(--shadow-2),
+    var(--glow-strong);
+}
+
+.modal-victory .modal-actions .btn-primary .btn-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   7. Help panel
+   ========================================================================== */
+
+/* The panel narrows towards the measure and the column is centred in what is
+   left, so the section rules stop where the sentences stop. They used to run
+   400px past the last word, which just drew a box around the empty half. */
+.modal:has(> .modal-body > .help) {
+  --modal-w: 760px;
+}
+
+.help {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: min(78ch, 100%);
+  margin-inline: auto;
+}
+
+.help-section {
+  min-width: 0;
+}
+
+.help-section > h3 {
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--hairline);
+  box-shadow: 0 1px 0 var(--hairline-light);
+  font-size: var(--fs-lg);
+  color: var(--text-strong);
+}
+
+.help-section > h3:not(:first-child) {
+  margin-top: var(--space-5);
+}
+
+.help-section > p {
+  max-width: 100%;
+}
+
+.help-points {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-point {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.help-point .icon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.help-table {
+  width: 100%;
+  margin-bottom: var(--space-4);
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+.help-caption {
+  padding-bottom: var(--space-2);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.help-table tr {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.help-table tr:last-child {
+  border-bottom: 0;
+}
+
+.help-table th {
+  width: 34%;
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  font-weight: 500;
+  text-align: left;
+  vertical-align: top;
+}
+
+.help-table td {
+  padding: var(--space-2) 0;
+  color: var(--text);
+  vertical-align: top;
+}
+
+.help-table code {
+  white-space: nowrap;
+}
+
+.help-table kbd {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--btn-rim-outer);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--btn-face-1), var(--btn-face-2));
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-1);
+  font: 600 var(--fs-xs) / 1.5 var(--font-mono);
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
+.legend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(258px, 100%), 1fr));
+  gap: var(--space-3);
+}
+
+.legend-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-highlight) 62%, transparent),
+    color-mix(in srgb, var(--sky-2) 30%, transparent)
+  );
+  box-shadow:
+    inset 0 1px 0 var(--glass-border-strong),
+    var(--shadow-1);
+}
+
+/* Each legend drawing is a real TreeView on a two-commit snapshot, so it can
+   never drift from the board again. It is a picture, not a control: pointer
+   events are off so a wheel over the card scrolls the panel rather than
+   zooming the drawing, and the graph's own furniture is hidden. */
+.legend-tree {
+  position: relative;
+  width: 100%;
+  height: 164px;
+  border-radius: var(--radius-md);
+  background: var(--stage-bg);
+  box-shadow: inset 0 1px 0 var(--hairline-light);
+  overflow: hidden;
+}
+
+.legend-tree .tv {
+  pointer-events: none;
+  border-radius: var(--radius-md);
+}
+
+.legend-tree .tv-controls,
+.legend-tree .tv-reset,
+.legend-tree .tv-tip {
+  display: none;
+}
+
+.legend-item figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.legend-item figcaption b {
+  font-size: var(--fs-md);
+  color: var(--text-strong);
+}
+
+/* ==========================================================================
+   8. Toasts
+
+   MODALS owns the rail as well as the toasts on it. Centred on the viewport,
+   the rail landed on the seam between the two panes - the one column of the
+   layout that belongs to neither - and sat on the terminal's own last lines at
+   the bottom edge. Anchored to the top right it crosses nothing: the topbar is
+   above it, the terminal is left of it, the graph's zoom controls are below it.
+   ========================================================================== */
+
+#toast-root {
+  left: auto;
+  right: var(--space-4);
+  bottom: auto;
+  /* toast.js measures the top bar and writes --rail-top; the fallback is only
+     for a page that has no bar at all. */
+  top: var(--rail-top, var(--space-3));
+  transform: none;
+  align-items: stretch;
+  width: min(390px, calc(100vw - var(--space-5) * 2));
+}
+
+.toast {
+  --toast-cap: color-mix(in srgb, var(--glass-highlight) 92%, transparent);
+  /* The status tokens are tuned for TEXT contrast, so in the day theme they are
+     a dark bottle green, an olive and a brick red. Painted as a 3px rail they
+     read as grime rather than as a status colour, so decoration uses a lightened
+     derivative and the icon capsule keeps the real ink. In dusk the tokens are
+     already light and want no lightening at all. */
+  --toast-rail: color-mix(in srgb, var(--toast-accent, var(--accent)) 42%, var(--glass-highlight));
+
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-lg);
+  /* One near-flat surface. The old ramp finished on --sky-2, so four stacked
+     toasts alternated white-to-blue, white-to-blue, and the rail read as
+     venetian blinds rather than as one component repeated. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-highlight) 62%, var(--sky-1)) 0%,
+    color-mix(in srgb, var(--sky-1) 92%, transparent) 58%,
+    color-mix(in srgb, var(--sky-1) 88%, transparent) 100%
+  );
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  /* Same recipe as .modal: deep ambient shadow plus a coloured bloom. The rail
+     is an inset shadow rather than a border, so it curves with the corner
+     radius instead of squaring off against it. */
+  box-shadow:
+    inset 3px 0 0 var(--toast-rail),
+    var(--shadow-3),
+    0 14px 34px -20px color-mix(in srgb, var(--toast-rail) 80%, transparent),
+    inset 0 -10px 18px -16px var(--btn-inner-shadow);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  cursor: pointer;
+  overflow: hidden;
+  opacity: 0;
+  transform: translate3d(0, -14px, 0) scale(0.97);
+  transition:
+    opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-2) var(--ease-spring),
+    height var(--dur-2) var(--ease-in-out),
+    margin var(--dur-2) var(--ease-in-out),
+    padding var(--dur-2) var(--ease-in-out);
+}
+
+/* 1. curved specular cap - the thing that makes the glass look wet */
+.toast::before {
+  content: '';
+  position: absolute;
+  inset: 1px 1px auto;
+  z-index: -1;
+  height: 62%;
+  pointer-events: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 50% 50% /
+    var(--radius-lg) var(--radius-lg) 34% 34%;
+  background: linear-gradient(
+    180deg,
+    var(--toast-cap) 0%,
+    color-mix(in srgb, var(--toast-cap) 38%, transparent) 52%,
+    transparent 100%
+  );
+}
+
+/* 2. rim bevel plus a diagonal sheen off the top-left corner */
+.toast::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    116deg,
+    color-mix(in srgb, var(--glass-highlight) 55%, transparent) 0%,
+    transparent 26%
+  );
+  box-shadow:
+    inset 0 1px 0 var(--glass-border-strong),
+    inset 1px 0 0 color-mix(in srgb, var(--glass-highlight) 55%, transparent),
+    inset -1px 0 0 color-mix(in srgb, var(--glass-highlight) 38%, transparent);
+}
+
+html[data-theme='dusk'] .toast {
+  --toast-cap: color-mix(in srgb, var(--glass-highlight) 70%, transparent);
+  --toast-rail: var(--toast-accent, var(--accent));
+
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--glass-highlight) 30%, var(--sky-2)) 0%,
+    color-mix(in srgb, var(--sky-1) 94%, transparent) 58%,
+    color-mix(in srgb, var(--sky-1) 88%, transparent) 100%
+  );
+}
+
+.toast.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+.toast.is-leaving {
+  opacity: 0;
+  transform: translate3d(0, -8px, 0) scale(0.97);
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-width: 0;
+  border-bottom-width: 0;
+}
+
+.toast-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid color-mix(in srgb, var(--toast-accent, var(--accent)) 40%, transparent);
+  border-radius: var(--radius-pill);
+  background: var(--toast-tint, var(--info-tint));
+  box-shadow: inset 0 1px 0 var(--hairline-light);
+  color: var(--toast-accent, var(--accent));
+}
+
+.toast-icon .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.toast-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+/* A real button now, so it looks and behaves like one. It stays visible: a
+   dismiss control that only appears on hover does not exist on a touch screen
+   and cannot be found by a reader who is tabbing. */
+.toast-close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color var(--dur-1) var(--ease-out),
+    background var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out);
+}
+
+.toast-close:hover {
+  color: var(--danger);
+  border-color: var(--btn-rim-outer);
+  background: var(--btn-ghost-hover);
+}
+
+.toast-close .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Inset and rounded. Flush to the edges it squared off against all four corners
+   and, together with the left rail, drew a dark L around the card. */
+.toast-bar {
+  position: absolute;
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: 5px;
+  height: 3px;
+  transform-origin: left center;
+  border-radius: var(--radius-pill);
+  background: var(--toast-rail);
+  opacity: 0.9;
+  animation-name: toast-drain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.toast.is-paused .toast-bar {
+  animation-play-state: paused;
+}
+
+@keyframes toast-drain {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+.toast-info {
+  --toast-accent: var(--info);
+  --toast-tint: var(--info-tint);
+}
+
+.toast-success {
+  --toast-accent: var(--ok);
+  --toast-tint: var(--ok-tint);
+}
+
+.toast-warning {
+  --toast-accent: var(--warn);
+  --toast-tint: var(--warn-tint);
+}
+
+.toast-error {
+  --toast-accent: var(--danger);
+  --toast-tint: var(--danger-tint);
+}
+
+/* ==========================================================================
+   9. Responsive
+   ========================================================================== */
+
+/* A panel centred in a 900px-tall window puts its top edge at y=54, which is
+   exactly where the level title sits in the bar behind it - so the frame drew a
+   horizontal line through the title and the blurred backdrop was not enough to
+   stop the eye reading it as a cut. modal.js measures the bar and writes
+   --modal-clear-top; the layer keeps at least that much room above the panel,
+   and the panel gives the same height back so a tall one still fits.
+   Below 641px the modal is a bottom sheet and there is nothing to clear. */
+@media (min-width: 641px) {
+  .modal-layer {
+    padding-top: max(clamp(var(--space-3), 4vh, var(--space-7)), var(--modal-clear-top, 0px));
+  }
+
+  .modal {
+    max-height: min(
+      88vh,
+      calc(100dvh - var(--modal-clear-top, 0px) - var(--space-7)),
+      940px
+    );
+  }
+}
+
+@media (max-width: 900px) {
+  .modal-lesson {
+    --modal-pad: var(--space-4);
+  }
+
+  .seq-chips {
+    --chip-min: 210px;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-layer {
+    padding: 0;
+    place-items: end stretch;
+  }
+
+  .modal {
+    --modal-w: 100%;
+    width: 100%;
+    max-height: 94dvh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    border-bottom: 0;
+  }
+
+  .modal::before {
+    border-radius: var(--radius-xl) var(--radius-xl) 50% 50% /
+      var(--radius-xl) var(--radius-xl) 26% 26%;
+  }
+
+  .modal-grab {
+    display: block;
+  }
+
+  .modal,
+  .modal-lesson {
+    --modal-pad: var(--space-4);
+  }
+
+  .modal-head {
+    padding: var(--space-2) var(--modal-pad) var(--space-3);
+  }
+
+  .modal-title {
+    font-size: var(--fs-lg);
+  }
+
+  .modal-victory .modal-title {
+    font-size: var(--fs-2xl);
+  }
+
+  .modal-body.is-scrollable {
+    padding-bottom: var(--space-6);
+  }
+
+  .modal-foot {
+    padding: var(--space-3) var(--modal-pad) max(var(--space-4), env(safe-area-inset-bottom));
+  }
+
+  .modal-actions {
+    width: 100%;
+  }
+
+  /* The primary takes the room; a secondary - and a disabled "Back" most of
+     all - takes only what its label needs instead of 45% of the tray. */
+  .modal-actions .btn {
+    flex: 0 1 auto;
+  }
+
+  .modal-actions .btn-primary,
+  .modal-actions .btn-danger {
+    flex: 1 1 auto;
+  }
+
+  .modal-foot-extra {
+    justify-content: center;
+    width: 100%;
+  }
+
+  /* A full-width rail under the topbar: at this width the panes are stacked,
+     so there is no seam to straddle and the corner inset just wastes room. */
+  #toast-root {
+    left: var(--space-3);
+    right: var(--space-3);
+    width: auto;
+  }
+
+  .levels-top {
+    gap: var(--space-2);
+  }
+
+  .levels-meter {
+    flex: 1 1 100%;
+  }
+
+  .legend-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .help-table th {
+    width: 44%;
+  }
+
+  .rebase-note {
+    display: none;
+  }
+
+  /* Sheets rise from the bottom edge instead of scaling up. */
+  .modal-layer[data-state='enter'] .modal,
+  .modal-layer[data-state='exit'] .modal {
+    transform: translate3d(0, 100%, 0) scale(1);
+  }
+}
+
+@media (max-width: 400px) {
+  .modal-title {
+    font-size: var(--fs-md);
+  }
+
+  .lesson-demo {
+    padding: var(--space-3);
+  }
+
+  .modal-lesson .modal-foot,
+  .modal-levels .modal-foot {
+    row-gap: var(--space-2);
+  }
+}
+
+/* Very wide screens: bigger panels, but the reading measure stays put. The
+   lesson keeps its own width - it is text, and text does not want 920px. */
+@media (min-width: 1900px) {
+  .modal-lg { --modal-w: 920px; }
+  .modal-xl { --modal-w: 1320px; }
+
+  .seq-chips {
+    --chip-min: 270px;
+  }
+}
+
+/* ==========================================================================
+   9b. Coarse pointers  (WCAG 2.2 AA, 2.5.8 Target Size)
+
+   aero.css and tree.css each grow their own controls on a touch screen; nothing
+   here did, so every control inside a modal kept its mouse size on a phone. The
+   floor is 24x24; these go to 44 because a finger is not a cursor and because a
+   miss inside a modal is expensive - the lesson dots were 11x11 and are the only
+   way to move between slides.
+
+   Two of these are worse than small on touch. .code-copy and the lesson dots
+   were sized for hover, and .code-copy only became visible on hover at all -
+   on a touch screen a hover-only control does not exist.
+   ========================================================================== */
+
+@media (pointer: coarse) {
+  .modal-x {
+    width: 44px;
+    height: 44px;
+  }
+
+  .modal-x .icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .toast-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .toast-close .icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Always on: there is no hover to reveal it with. */
+  .code-copy {
+    top: var(--space-1);
+    right: var(--space-1);
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 var(--space-3);
+    gap: var(--space-2);
+    justify-content: center;
+    opacity: 1;
+  }
+
+  .code-copy .icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Room for it, so it stops sitting on the first line of the code. */
+  .prose pre,
+  .modal-body pre {
+    padding-top: calc(44px + var(--space-2));
+    padding-right: var(--space-4);
+  }
+
+  /* The bead stays 11px - it is a position indicator, not a button face - and
+     moves to ::before so the button box around it can grow to 44x44 without
+     growing the dot. Everything the dot paints moves with it. */
+  .lesson-dots {
+    gap: 0;
+    margin-inline: calc(var(--space-2) * -1);
+  }
+
+  /* Every state has to be listed: .is-done and .is-current each paint the
+     button box in the base rules, and a 44px button that paints itself is a
+     44px dot, not a 44px target around an 11px dot. */
+  .lesson-dot,
+  .lesson-dot.is-done,
+  .lesson-dot.is-current {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: none;
+    box-shadow: none;
+  }
+
+  .lesson-dot::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 11px;
+    height: 11px;
+    translate: -50% -50%;
+    border: 1px solid color-mix(in srgb, var(--accent) 78%, transparent);
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+    box-shadow:
+      inset 0 1px 0 var(--hairline-light),
+      var(--shadow-1);
+    transition:
+      width var(--dur-2) var(--ease-out),
+      background var(--dur-1) var(--ease-out);
+  }
+
+  .lesson-dot.is-done::before {
+    background: color-mix(in srgb, var(--accent) 72%, transparent);
+  }
+
+  .lesson-dot.is-current::before {
+    width: 28px;
+    border-color: var(--btn-primary-rim-outer);
+    background: linear-gradient(180deg, var(--btn-primary-1), var(--btn-primary-2));
+    box-shadow:
+      inset 0 1px 0 var(--btn-primary-rim),
+      var(--glow);
+  }
+
+  .lesson-dot:hover {
+    transform: none;
+  }
+
+  /* Reachable without a hover, same as .code-copy. */
+  .rebase-grip .icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .rebase-keep {
+    width: 52px;
+    height: 44px;
+  }
+
+  /* The two controls at the top of the level browser were the last things in
+     any panel still under the touch minimum - the search field at 40px and the
+     group tabs at 38px - and they are the first two things a thumb goes for. */
+  .levels-search-input {
+    min-height: 44px;
+  }
+
+  .levels-tab {
+    min-height: 44px;
+  }
+}
+
+/* ==========================================================================
+   10. Reduced motion  (base.css already clamps durations; these kill the
+       transforms so nothing animates in from off-position)
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-layer[data-state='enter'] .modal,
+  .modal-layer[data-state='exit'] .modal {
+    opacity: 1;
+    transform: none;
+  }
+
+  .lesson-content.slide-out-left,
+  .lesson-content.slide-out-right,
+  .lesson-content.slide-in-left,
+  .lesson-content.slide-in-right {
+    transform: none;
+    opacity: 1;
+  }
+
+  .toast {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* The bloom stays. The bubbles go entirely: a rising bubble that cannot rise
+     is just a stray circle parked whereever its keyframe left it. */
+  .victory-bubble {
+    animation: none;
+    display: none;
+  }
+
+  .level-chip:hover,
+  .modal-x:hover,
+  .lesson-dot:hover {
+    transform: none;
+  }
+}

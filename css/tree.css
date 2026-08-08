@@ -1,0 +1,800 @@
+/* Commit graph. Owned by TREEVIEW. Every colour comes from tokens.css. */
+
+.tv {
+  /* Layout metrics read back by tree-view.js: keep these plain px values. */
+  --tv-r: 21px;
+  --tv-col: 96px;
+  --tv-row: 104px;
+  --tv-label-h: 24px;
+  --tv-label-gap: 5px;
+  --tv-label-off: 13px;
+  --tv-pill-pad: 10px;
+  --tv-pad: 26px;
+  --tv-region-gap: 40px;
+  --tv-label-fs: 12px;
+  --tv-id-fs: 14px;
+
+  /* Line work - edges, arrowheads, leaders, bead rims - keeps its branch hue but
+     accepts a ceiling on how light it may be. Day draws on a bright bay where
+     the raw tokens run from 2.4:1 (--branch-c8) to 4.3:1 against the water, so
+     the pale half of the palette fails the 3:1 WCAG 1.4.11 asks of a graphical
+     object you cannot read the graph without. Capping OKLCH lightness and
+     leaving chroma and hue alone darkens only the ones that need it and keeps
+     every branch its own colour - and it holds whatever values DESIGN gives the
+     tokens next, which a fixed mix percentage does not. Dusk draws on deep
+     water, passes already, and is left alone. */
+  --tv-ink-cap: 0.52;
+
+  /* HEAD is a pointer, not a brand. The token is now a deep on-palette indigo,
+     so day fills the capsule with it straight and carries white ink at 10.8:1.
+     Dusk's token is the light end of the same indigo: filled solid it would be
+     the brightest block in the viewport again, so there it becomes a tint over
+     deep water instead. */
+  --tv-head-fill: var(--head-color);
+  --tv-head-line: var(--head-color);
+  --tv-head-text: var(--text-inverse);
+
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* max-height, and a min-height small enough to stay under it: at 360px the
+     graph host is ~181px tall, and a 220px floor made this box overflow it and
+     get sliced by the pane - which is what cut the root commit in half. */
+  max-height: 100%;
+  min-height: 120px;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  font-family: var(--font-ui);
+  contain: layout paint;
+}
+
+html[data-theme='dusk'] .tv {
+  --tv-ink-cap: 1;
+  --tv-head-fill: color-mix(in srgb, var(--head-color) 22%, var(--sky-2));
+  --tv-head-text: var(--text-strong);
+}
+
+/* A miniature cannot spill over its frame and cannot be panned - the help
+   legend has pointer events off, and a goal panel that ran past its box would
+   hide the commits it exists to show - so it cannot buy legibility with zoom
+   the way the main graph can. It buys it here instead, from the ratio between
+   the id and everything else: the drawing is what shrinks to fit the frame, so
+   a shorter row pitch and a narrower lane raise the scale the whole miniature
+   lands on, and the id then rides that scale up.
+   The bead grows with the type rather than against it. A commit id is clipped
+   to 1.62 radii (see _updateNode), so 13px of mono needs a radius of about 15
+   to hold a two-glyph id without being shrunk back down - and the halo, which
+   is a tenth of the font size, only covers the inside of a stem once the type
+   is over about 11px, which is what took the legend id from 3.97:1 to a solid
+   pass. Measured in the help dialog: the four two-commit cards go 9.3px ->
+   19.2-21.9px and the merge card 5.7px -> 13.6px; the goal panel's worst
+   level goes 8.1px -> 13.2px. (Most of that came from a second fault - see
+   resize() - but these metrics are what the miniatures are read at.) */
+.tv--compact {
+  --tv-r: 17px;
+  --tv-col: 54px;
+  --tv-row: 52px;
+  --tv-label-h: 16px;
+  --tv-label-gap: 4px;
+  --tv-label-off: 7px;
+  --tv-pill-pad: 6px;
+  --tv-pad: 12px;
+  --tv-region-gap: 30px;
+  --tv-label-fs: 10px;
+  --tv-id-fs: 15px;
+  min-height: 100px;
+}
+
+.tv-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+  overflow: visible;
+}
+.tv.is-panning .tv-svg {
+  cursor: grabbing;
+}
+/* Inset on purpose - the drawing fills its box, so an outward ring would be
+   clipped by the pane - but the colour is the shared focus token, not the
+   decorative accent. */
+.tv-svg:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--radius-lg);
+}
+
+/* --- regions -------------------------------------------------------------- */
+
+.tv-panel-bg {
+  stroke: var(--origin-border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.tv-panel-title {
+  font-size: var(--tv-label-fs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  fill: var(--text-muted);
+}
+.tv-panel.is-remote .tv-panel-bg {
+  stroke-dasharray: 5 4;
+}
+.tv-divider {
+  stroke: var(--glass-border-strong);
+  stroke-width: 2;
+  stroke-dasharray: 2 7;
+  stroke-linecap: round;
+  opacity: 0.75;
+  vector-effect: non-scaling-stroke;
+}
+
+/* --- edges ---------------------------------------------------------------- */
+
+.tv-edge {
+  fill: none;
+}
+/* Deliberate hierarchy: the first-parent spine is the heaviest line on the
+   canvas, merge edges are lighter and dashed. The dash - not the arrowhead -
+   is what says "second parent": every parent link is arrowed, so the arrow can
+   mean one thing only, "points at its parent". */
+/* Butt caps, not round: a round cap is half the casing's width of white paint
+   past the end of the line, and the beads are translucent glass, so it showed
+   straight through them as a notch cut out of the silhouette. */
+.tv-edge-casing {
+  fill: none;
+  stroke: var(--glass-highlight);
+  stroke-width: 8.6;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+  opacity: 0.5;
+}
+.tv-edge-line {
+  fill: none;
+  stroke-width: 4.2;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+}
+/* A long dash in the branch's own colour. Deliberately unlike the short grey
+   dash of the ghost layer, which the goal panel can show at the same time. */
+.tv-edge.is-merge .tv-edge-line {
+  stroke-width: 2.8;
+  stroke-dasharray: 14 7;
+  stroke-linecap: butt;
+}
+.tv-edge.is-merge .tv-edge-casing {
+  stroke-width: 6.6;
+  opacity: 0.34;
+}
+.tv-edge-arrow {
+  fill: var(--tv-c, var(--edge));
+  stroke: none;
+}
+/* In dusk the white casing is too faint to read as an outline and only shows
+   up where it darkens the water; the brighter rim token holds both themes. */
+html[data-theme='dusk'] .tv-edge-casing {
+  stroke: var(--glass-border-strong);
+  opacity: 0.3;
+}
+.tv--compact .tv-edge-line {
+  stroke-width: 2.8;
+}
+.tv--compact .tv-edge.is-merge .tv-edge-line {
+  stroke-width: 2;
+}
+.tv--compact .tv-edge-casing {
+  stroke-width: 6;
+}
+
+/* --- commit beads --------------------------------------------------------- */
+
+.tv-node {
+  cursor: pointer;
+}
+.tv--readonly .tv-node {
+  cursor: default;
+}
+.tv-drop {
+  opacity: 0.85;
+}
+.tv-shade,
+.tv-spec,
+.tv-drop,
+.tv-inner-ring,
+.tv-core,
+.tv-rim,
+.tv-id,
+.tv-pulse,
+.tv-focus-ring {
+  pointer-events: none;
+}
+/* Pale casing under the rim, the same one the edges carry: butt-jointed light
+   against which the inked rim is read. Painted before the rim so the rim keeps
+   its own edge, and non-scaling so a fitted-down graph does not lose it. */
+.tv-rim-casing {
+  fill: none;
+  stroke: var(--glass-highlight);
+  stroke-width: 2.6;
+  opacity: 0.62;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+html[data-theme='dusk'] .tv-rim-casing {
+  stroke: var(--glass-border-strong);
+  opacity: 0.42;
+}
+/* The silhouette carries the bead against the water, so it takes the inked hue
+   and a little more weight: the glass fill alone measured 2.55-2.75:1 in day. */
+.tv-rim {
+  fill: none;
+  stroke: var(--tv-k, var(--commit-stroke));
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.95;
+}
+.tv-inner-ring {
+  fill: none;
+  stroke: var(--tv-c, var(--commit-stroke));
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.5;
+  vector-effect: non-scaling-stroke;
+}
+.tv-core {
+  fill: var(--tv-c, var(--commit-stroke));
+  opacity: 0.75;
+}
+/* The halo has to lift the id off a saturated bead without fattening the glyphs
+   into each other. It is a ratio of the font size, not a fixed width, so it
+   holds at every scale - a fixed 1.9px was proportionally thinner as the type
+   grew and stopped covering the inside of a stem at the size the help legend
+   uses, dropping the id to 2.83:1 in dusk.
+   The two numbers below are one setting: at 0.136 the halo was 0.95px each side
+   against 0.7px of tracking, so on a two-glyph id like "C2" the halos met and
+   the pair read as one blob at 1x. 0.1 of halo against 0.12em of tracking
+   leaves 1.68px of gap for 1.4px of paint, so every glyph keeps its own edge
+   and the ink still measures ~15:1 on the bead. */
+.tv-id {
+  font-family: var(--font-mono);
+  font-size: var(--tv-id-fs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  fill: var(--commit-text);
+  stroke: var(--commit-fill);
+  stroke-width: calc(var(--tv-id-fs) * 0.1);
+  paint-order: stroke fill;
+  stroke-linejoin: round;
+  user-select: none;
+}
+.tv-hit {
+  fill: transparent;
+  pointer-events: all;
+}
+.tv-pulse {
+  fill: none;
+  stroke: var(--tv-c, var(--accent));
+  stroke-width: 3;
+  opacity: 0;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+.tv-node.is-highlight .tv-rim {
+  stroke-width: 2.8;
+  opacity: 1;
+}
+/* Enter or a click picks a commit. It stays picked after focus moves on, so
+   "which one did I choose" is answered by the drawing and not only by the live
+   region that announced it. */
+.tv-node.is-selected .tv-rim {
+  stroke: var(--accent);
+  stroke-width: 3;
+  opacity: 1;
+}
+.tv-node.is-selected .tv-focus-ring {
+  opacity: 0.55;
+  stroke-dasharray: none;
+}
+.tv-focus-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: 4 4;
+  opacity: 0;
+  vector-effect: non-scaling-stroke;
+}
+.tv-node.is-focused .tv-focus-ring {
+  opacity: 1;
+  animation: tv-spin 6s linear infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@keyframes tv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* branch hover dimming */
+.tv.is-focusing .tv-node,
+.tv.is-focusing .tv-edge {
+  opacity: 0.22;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+.tv.is-focusing .tv-node.is-lit,
+.tv.is-focusing .tv-edge.is-lit {
+  opacity: 1;
+}
+
+/* --- ref labels ----------------------------------------------------------- */
+
+.tv-label {
+  cursor: pointer;
+}
+
+/* Leader: the tether from the bead's rim into the pill. Without it a label in
+   the lane between two columns reads as belonging to neither commit. */
+.tv-lead {
+  fill: none;
+  stroke: var(--tv-k, var(--edge));
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.tv-lead-casing {
+  fill: none;
+  stroke: var(--glass-highlight);
+  stroke-width: 4.4;
+  stroke-linecap: round;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.tv-lead-dot {
+  fill: var(--tv-k, var(--edge));
+  stroke: var(--glass-highlight);
+  stroke-width: 1.2;
+  pointer-events: none;
+}
+html[data-theme='dusk'] .tv-lead-casing {
+  stroke: var(--glass-border-strong);
+  opacity: 0.4;
+}
+.tv--compact .tv-lead {
+  stroke-width: 1.4;
+}
+.tv--compact .tv-lead-casing {
+  stroke-width: 3.4;
+}
+.tv--compact .tv-lead-dot {
+  r: 2;
+}
+
+/* Filled caret inside the checked-out branch's pill. */
+.tv-pill-caret {
+  fill: var(--tv-c, var(--accent));
+  stroke: none;
+  pointer-events: none;
+}
+
+.tv-pill {
+  fill: var(--branch-bg);
+  stroke: var(--tv-c, var(--glass-border-strong));
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.tv-pill-gloss {
+  pointer-events: none;
+  opacity: 0.85;
+}
+.tv-pill-glow {
+  fill: var(--tv-c, var(--accent));
+  opacity: 0;
+  pointer-events: none;
+}
+/* The non-colour channel for the seventh and eighth branches. The 150-222deg
+   band gives six colours that are either 29deg apart or 14deg apart with a
+   lightness step between them; the last two slots are 7deg twins of two of
+   those, at the same lightness, so they carry a doubled pill outline as well.
+   Drawn in the CAPPED ink, not the raw token: this rule is information, so it
+   owes WCAG 1.4.11 its 3:1 against the glass it sits on, and the raw light half
+   of the ramp does not have it. See RAMP_TWINS in tree-view.js for why the mark
+   is neither a dash (both dash meanings are taken) nor a weight change (the
+   bead rim's weight is how a highlighted and a selected commit are said). */
+.tv-pill-band {
+  fill: none;
+  stroke: var(--tv-k, var(--edge));
+  stroke-width: 1.3;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.9;
+  pointer-events: none;
+}
+.tv-pill-text {
+  font-family: var(--font-mono);
+  font-size: var(--tv-label-fs);
+  font-weight: 700;
+  fill: var(--branch-text);
+  user-select: none;
+  pointer-events: none;
+}
+.tv-label--tag .tv-pill {
+  fill: var(--tag-bg);
+  stroke: var(--amber-1);
+}
+/* --tag-bg reads as flat mustard against dusk water. Tinting the glass with
+   the live amber instead keeps the tag family recognisable and lifts the label
+   to 8.3:1, without touching the token. */
+html[data-theme='dusk'] .tv-label--tag .tv-pill {
+  fill: color-mix(in srgb, var(--amber-1) 22%, var(--branch-bg));
+}
+/* A dashed pill has to mean one thing. The goal layer already uses dashes for
+   "not there yet", so a remote-tracking branch is marked a different way: a
+   solid rule at half weight over the recessed well, which reads as "a copy of
+   somewhere else" without borrowing the ghost's mark. */
+.tv-label.is-remote .tv-pill {
+  fill: var(--glass-bg-dim);
+  stroke-width: 1;
+  opacity: 0.95;
+}
+.tv-label.is-remote .tv-pill-text {
+  fill: var(--text-muted);
+}
+.tv-label.is-active .tv-pill {
+  stroke-width: 2.5;
+  fill: var(--glass-bg-strong);
+}
+.tv-label.is-active .tv-pill-glow {
+  animation: tv-glow 2.6s var(--ease-in-out) infinite;
+}
+@keyframes tv-glow {
+  0%,
+  100% {
+    opacity: 0.18;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+.tv-label--head .tv-pill,
+.tv-label.is-detached .tv-pill {
+  fill: var(--glass-bg-strong);
+  stroke: var(--tv-head-line);
+  stroke-width: 2;
+  stroke-dasharray: 6 3;
+}
+.tv-label--head .tv-pill-text {
+  fill: var(--tv-head-line);
+  letter-spacing: 0.04em;
+}
+.tv-head-link {
+  stroke: var(--tv-head-line);
+  stroke-width: 2;
+  fill: none;
+}
+.tv-head-arrow {
+  fill: var(--tv-head-line);
+  stroke: none;
+}
+/* Deep marine glass with a bright rule, in both themes: 9.9:1 under the white
+   ink in day, 10.4:1 in dusk. The gloss is deliberately weak - at the strength
+   used on the branch pills it would wash the capsule's top half out to 3.6:1. */
+.tv-head-pill {
+  fill: var(--tv-head-fill);
+  stroke: var(--glass-border-strong);
+  stroke-width: 1.2;
+}
+.tv-head-gloss {
+  fill: var(--glass-highlight);
+  opacity: 0.16;
+  pointer-events: none;
+}
+.tv-head-text {
+  font-family: var(--font-ui);
+  font-size: calc(var(--tv-label-fs) * 0.92);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  fill: var(--tv-head-text);
+  pointer-events: none;
+  user-select: none;
+}
+html[data-theme='dusk'] .tv-head-gloss {
+  opacity: 0.1;
+}
+
+/* --- ghost layer ---------------------------------------------------------- */
+/* What the learner has that the target does not. Outlines only, well under the
+   solid target that sits on top of them: the goal must stay the dominant read,
+   the ghost only has to answer "what still has to change". */
+
+.tv-ghost {
+  pointer-events: none;
+}
+.tv-ghosts {
+  animation: tv-ghost-in var(--dur-3) var(--ease-out);
+}
+@keyframes tv-ghost-in {
+  from {
+    opacity: 0;
+  }
+}
+/* The one ghost element that is not decoration: the dashed edge is what says
+   which commit hangs from which, so a reader cannot tell what the target
+   history IS without it. At 0.4 it measured 1.96:1 in day and 2.76 in dusk.
+   It now carries the same weight as the dashed outlines around it - the ghost
+   still stays subordinate on shape, which is where it was always meant to be
+   subordinate. */
+.tv-ghost-edge {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
+  stroke-linecap: round;
+  opacity: 0.88;
+  vector-effect: non-scaling-stroke;
+}
+/* Dimmed, but not unreadable: the pale text over a translucent well measured
+   1.68:1. The plate under both the bead id and the pill text is now opaque
+   enough to carry ink at 4.5:1, and the ghost stays subordinate on shape
+   instead - dashed outline, no gloss, no colour. */
+.tv-ghost-body {
+  fill: var(--glass-bg-strong);
+  stroke: var(--text-muted);
+  stroke-width: 1.6;
+  stroke-dasharray: 4 3.5;
+  opacity: 0.92;
+  vector-effect: non-scaling-stroke;
+}
+.tv-ghost-id {
+  font-family: var(--font-mono);
+  font-size: calc(var(--tv-id-fs) * 0.9);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  fill: var(--text);
+  user-select: none;
+}
+.tv-ghost-lead {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.3;
+  stroke-dasharray: 3 3;
+  opacity: 0.45;
+  vector-effect: non-scaling-stroke;
+}
+.tv-ghost-pill {
+  fill: var(--glass-bg-strong);
+  stroke: var(--text-muted);
+  stroke-width: 1.4;
+  stroke-dasharray: 4 3.5;
+  opacity: 0.92;
+  vector-effect: non-scaling-stroke;
+}
+.tv-ghost-text {
+  font-family: var(--font-mono);
+  font-size: calc(var(--tv-label-fs) * 0.94);
+  font-weight: 700;
+  fill: var(--text);
+  user-select: none;
+}
+
+/* measurement probes must match the painted text metrics */
+.tv-t-pill,
+.tv-t-tag {
+  font-family: var(--font-mono);
+  font-size: var(--tv-label-fs);
+  font-weight: 700;
+}
+.tv-t-head {
+  font-family: var(--font-ui);
+  font-size: calc(var(--tv-label-fs) * 0.92);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+/* --- chrome --------------------------------------------------------------- */
+
+.tv-controls {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-2);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+.tv-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.tv-btn:hover {
+  background: var(--glass-bg-strong);
+  color: var(--text-strong);
+}
+/* No focus rule of its own. --accent is a decorative token - it measured 1.69:1
+   against the bay these buttons float over - and declaring it here also parked
+   a solid 2px band across the white contrast ring base.css draws under it, so
+   the shared halo could never do its job. Without a rule the button takes the
+   document's: 2px of --focus-ring, which is the darkened accent, over the
+   near-white contrast band and the halo outside it, exactly like every other
+   control. */
+.tv-ico {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tv-reset {
+  position: absolute;
+  right: calc(var(--space-3) + 38px);
+  bottom: var(--space-3);
+  display: none;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--glass-border-strong);
+  background: var(--glass-bg-strong);
+  box-shadow: var(--shadow-2);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  color: var(--text-strong);
+  font: 600 var(--fs-xs) / 1 var(--font-ui);
+  cursor: pointer;
+}
+.tv.is-adjusted .tv-reset {
+  display: block;
+  animation: tv-rise var(--dur-2) var(--ease-out);
+}
+.tv-reset:hover {
+  border-color: var(--accent);
+}
+/* Same token, for the same reason. This one keeps a rule of its own only
+   because it is written out where a reader of this file will look for it - the
+   values are the document's defaults either way. */
+.tv-reset:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+@keyframes tv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.tv-tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  max-width: 260px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border-strong);
+  background: var(--glass-bg-strong);
+  box-shadow: var(--shadow-3);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  color: var(--text);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  pointer-events: none;
+}
+.tv-tip[hidden] {
+  display: none;
+}
+.tv-tip-id {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: 700 var(--fs-sm) / 1.3 var(--font-mono);
+  color: var(--text-strong);
+}
+.tv-tip-tag {
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--text-inverse);
+  font: 700 9px/1.6 var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tv-tip-row {
+  display: flex;
+  gap: var(--space-2);
+}
+.tv-tip-k {
+  flex: 0 0 46px;
+  color: var(--text-muted);
+}
+.tv-tip-muted {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.tv-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.tv-empty[hidden] {
+  display: none;
+}
+.tv-empty-card {
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  box-shadow: var(--shadow-2);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  text-align: center;
+}
+.tv-empty-title {
+  font: 700 var(--fs-lg) / 1.3 var(--font-ui);
+  color: var(--text-strong);
+}
+.tv-empty-body {
+  margin-top: var(--space-1);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+/* Both are read by assistive tech and neither may use display:none, which
+   would take them out of the accessibility tree along with the pixels. */
+.tv-sr,
+.tv-a11y {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A 30x28 button is a miss target on glass at arm's length; on a coarse
+   pointer both controls go to the 44px minimum. */
+@media (pointer: coarse) {
+  .tv-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .tv-reset {
+    min-height: 44px;
+    right: calc(var(--space-3) + 52px);
+    padding: 5px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-node.is-focused .tv-focus-ring,
+  .tv-label.is-active .tv-pill-glow,
+  .tv-ghosts,
+  .tv.is-adjusted .tv-reset {
+    animation: none;
+  }
+  .tv-label.is-active .tv-pill-glow {
+    opacity: 0.32;
+  }
+  .tv.is-focusing .tv-node,
+  .tv.is-focusing .tv-edge {
+    transition: none;
+  }
+}

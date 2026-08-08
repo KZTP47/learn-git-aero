@@ -1,0 +1,2053 @@
+/* ==========================================================================
+   aero.css - the Frutiger Aero component system.
+
+   Layers (z-index):
+     0  #aero-bg          fixed, non-interactive
+     1  #workspace
+     2  #topbar           above the panes so .tip bubbles clear them
+     2  #command-hint     (inside #workspace)
+     3  #goal-panel       (inside #workspace)
+    60  #modal-root       (modals.css owns what goes inside)
+    70  #toast-root
+    90  .boot-error
+   100  .skip-link
+
+   Rules of the house:
+     - colours come from tokens.css, never literals
+     - anything that moves animates transform/opacity only
+     - gloss overlays sit at z-index -1 so they never wash out text
+     - the stage (#canvas-pane) stays nearly clear so the sky reads through;
+       reading surfaces are frosted enough to hold 4.5:1
+   ========================================================================== */
+
+/* ==========================================================================
+   1. Glass utilities
+   ========================================================================== */
+
+.glass,
+.glass-strong,
+.glass-dim {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* Wet edge: a bright specular rim across the top, a cool reflected rim under
+   the bottom, and a soft internal bloom just below the top edge. */
+.glass {
+  background-color: var(--glass-bg);
+  box-shadow:
+    var(--shadow-2),
+    inset 0 1px 0 var(--rim-top),
+    inset 0 -1px 0 var(--rim-bottom),
+    inset 0 10px 22px -16px var(--rim-top);
+}
+
+.glass-strong {
+  background-color: var(--glass-bg-strong);
+  border-color: var(--glass-border-strong);
+  box-shadow:
+    var(--shadow-3),
+    inset 0 1px 0 var(--rim-top),
+    inset 0 -1px 0 var(--rim-bottom),
+    inset 0 14px 28px -18px var(--rim-top);
+}
+
+/* A recessed wet well. The fill is tinted and translucent rather than plain
+   white, and the blur is high enough that the sky moves behind it - at
+   rgba(255,255,255,0.8)/blur(8px) this read as an opaque paper card sitting on
+   top of the glass instead of a pane cut into it. */
+.glass-dim {
+  background-color: var(--glass-bg-dim);
+  border-color: var(--hairline);
+  box-shadow:
+    inset 0 2px 6px var(--glass-shadow),
+    inset 0 1px 0 var(--rim-bottom),
+    inset 0 -1px 0 var(--rim-top);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+
+/* Specular sheen. Behind the content, so gloss never costs contrast. */
+.glass::before,
+.glass-strong::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    var(--glass-highlight) 0%,
+    color-mix(in srgb, var(--glass-highlight) 42%, transparent) 32%,
+    transparent 54%
+  );
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.glass-strong::before {
+  opacity: 0.5;
+}
+
+/* ==========================================================================
+   2. The background: #aero-bg
+   ========================================================================== */
+
+#aero-bg {
+  /* Seamless caustic tile. Three things have to be true together or a hard
+     vertical edge appears every tile:
+       1. stitchTiles="stitch" - without it Perlin noise simply does not wrap.
+       2. an explicit userSpaceOnUse filter region equal to the tile, so the
+          stitch happens on the tile edge and not on the default -10%/120% box.
+       3. baseFrequency in whole cycles per tile: 6/512 and 22/512.
+     The tile is then painted 1:1 (mask-size 512px), because any resample
+     softens the stitched edge back into a visible seam. */
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Cfilter id='n' x='0' y='0' width='512' height='512' filterUnits='userSpaceOnUse'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.01171875 0.04296875' numOctaves='3' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 1.1 0.4 0 0 -0.5'/%3E%3C/filter%3E%3Crect width='512' height='512' filter='url(%23n)'/%3E%3C/svg%3E");
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  contain: strict;
+  background: linear-gradient(
+    177deg,
+    var(--bg-1) 0%,
+    var(--bg-2) 14%,
+    var(--bg-3) 44%,
+    var(--bg-4) 72%,
+    var(--bg-5) 100%
+  );
+}
+
+.aero-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* -- sun / moon bloom, with two lens ghosts -------------------------------- */
+.aero-bloom {
+  background:
+    radial-gradient(26% 20% at 15% -3%, var(--bg-bloom) 0%, transparent 72%),
+    radial-gradient(66% 52% at 15% -8%, var(--bg-bloom-warm) 0%, transparent 74%),
+    radial-gradient(184px 184px at 27% 26%, transparent 58%, var(--bg-bloom-ring) 72%, transparent 82%),
+    radial-gradient(104px 104px at 37% 47%, transparent 54%, var(--bg-bloom-ring) 71%, transparent 84%);
+  animation: bloom-breathe 26s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes bloom-breathe {
+  from {
+    transform: scale(1) translate3d(0, 0, 0);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1.07) translate3d(1.4%, 0.8%, 0);
+    opacity: 1;
+  }
+}
+
+/* -- god rays -------------------------------------------------------------- */
+.aero-rays {
+  inset: -32% -28%;
+  transform-origin: 24% 0%;
+  opacity: 0.9;
+  background: repeating-linear-gradient(
+    105deg,
+    transparent 0px,
+    var(--bg-ray) 42px,
+    transparent 96px,
+    transparent 158px,
+    var(--bg-ray) 206px,
+    transparent 264px,
+    transparent 372px
+  );
+  -webkit-mask-image: radial-gradient(78% 66% at 22% -6%, var(--mask-opaque) 0%, transparent 78%);
+  mask-image: radial-gradient(78% 66% at 22% -6%, var(--mask-opaque) 0%, transparent 78%);
+  animation: rays-drift 52s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes rays-drift {
+  from {
+    transform: translate3d(-2.5%, 0, 0) rotate(-1.2deg);
+  }
+  to {
+    transform: translate3d(3.5%, 0, 0) rotate(1.5deg);
+  }
+}
+
+/* -- water-surface shimmer ------------------------------------------------- */
+.aero-surface {
+  background:
+    linear-gradient(180deg, transparent 46%, var(--bg-surface-line) 51%, transparent 56%),
+    linear-gradient(180deg, transparent 60%, var(--bg-surface-line) 63.5%, transparent 68%),
+    linear-gradient(180deg, transparent 74%, var(--bg-surface-line) 77%, transparent 81%);
+  opacity: 0.4;
+  animation: surface-sway 30s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes surface-sway {
+  from {
+    transform: translate3d(0, -1.2%, 0) scaleY(1);
+    opacity: 0.28;
+  }
+  to {
+    transform: translate3d(0, 1.4%, 0) scaleY(1.04);
+    opacity: 0.5;
+  }
+}
+
+/* -- leaf-green nature note along the bottom ------------------------------- */
+.aero-leaf {
+  background:
+    radial-gradient(76% 26% at 12% 106%, var(--bg-leaf) 0%, transparent 72%),
+    radial-gradient(52% 18% at 88% 108%, var(--bg-leaf) 0%, transparent 74%);
+  animation: leaf-swell 34s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes leaf-swell {
+  from {
+    transform: translate3d(-1%, 1%, 0) scale(1);
+    opacity: 0.8;
+  }
+  to {
+    transform: translate3d(1.5%, -1.5%, 0) scale(1.06);
+    opacity: 1;
+  }
+}
+
+/* -- caustic shimmer ------------------------------------------------------- */
+/* The drift is translation only. scale() resamples the tile grid every frame,
+   which stretches the stitched edge and puts the seam straight back; a rigid
+   translate inside the -12% overscan moves the whole plane and stays on the
+   compositor. */
+.aero-caustic {
+  inset: -12%;
+  background-color: var(--bg-caustic);
+  -webkit-mask-image: var(--noise);
+  mask-image: var(--noise);
+  -webkit-mask-size: 512px 512px;
+  mask-size: 512px 512px;
+  opacity: 0.85;
+  animation: caustic-drift 38s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes caustic-drift {
+  from {
+    transform: translate3d(-1.6%, 1.2%, 0);
+  }
+  to {
+    transform: translate3d(2.2%, -1.8%, 0);
+  }
+}
+
+/* -- bokeh orbs: hollow glass spheres, never bright discs -------------------
+   Three rules, all of them because a commit bead must always win:
+     - no solid core. The old orbs were a filled radial blob with a crisp 1.5px
+       inset ring around it, so the ring and the blob read as two separate
+       objects and the blob competed with a bead for the eye. These are a soft
+       rim that fades to transparent on both sides plus a faint interior, i.e.
+       an actual bubble.
+     - capped at 210px, and kept OUT of the commit graph's box rather than
+       merely away from its middle. "Down the left and into the far corners"
+       was measured and found wanting: three of the six still landed inside
+       #canvas-pane, one of them entirely. Every orb now lives in the band the
+       terminal pane occupies, which is why each left offset is a min() of a
+       percentage and a pixel cap - on a 2560px screen the terminal stops
+       growing at 640px, so a bare percentage walks the orbs right into the
+       graph again.
+     - the .canvas-stage scrim knocks back whatever still passes underneath. */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 27%, var(--bubble-spec) 0%, transparent 13%),
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--bokeh-1) 16%, transparent) 0%,
+      color-mix(in srgb, var(--bokeh-1) 34%, transparent) 52%,
+      color-mix(in srgb, var(--bokeh-1) 96%, transparent) 78%,
+      transparent 100%
+    );
+  opacity: 0.75;
+  animation: orb-drift 34s var(--ease-in-out) infinite alternate;
+  will-change: transform;
+}
+
+.orb-2,
+.orb-5 {
+  background:
+    radial-gradient(circle at 34% 27%, var(--bubble-spec) 0%, transparent 13%),
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--bokeh-2) 16%, transparent) 0%,
+      color-mix(in srgb, var(--bokeh-2) 34%, transparent) 52%,
+      color-mix(in srgb, var(--bokeh-2) 96%, transparent) 78%,
+      transparent 100%
+    );
+}
+
+.orb-3,
+.orb-6 {
+  background:
+    radial-gradient(circle at 34% 27%, var(--bubble-spec) 0%, transparent 13%),
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--bokeh-3) 16%, transparent) 0%,
+      color-mix(in srgb, var(--bokeh-3) 34%, transparent) 52%,
+      color-mix(in srgb, var(--bokeh-3) 96%, transparent) 78%,
+      transparent 100%
+    );
+}
+
+.orb-1 {
+  width: 210px;
+  height: 210px;
+  left: 2%;
+  top: 11%;
+  animation-duration: 41s;
+}
+.orb-2 {
+  width: 150px;
+  height: 150px;
+  left: min(21%, 268px);
+  top: 61%;
+  animation-duration: 33s;
+  animation-delay: -6s;
+}
+.orb-3 {
+  width: 118px;
+  height: 118px;
+  left: 9%;
+  top: 79%;
+  animation-duration: 46s;
+  animation-delay: -14s;
+}
+.orb-4 {
+  width: 170px;
+  height: 170px;
+  left: min(13%, 172px);
+  top: 31%;
+  animation-duration: 37s;
+  animation-delay: -21s;
+}
+.orb-5 {
+  width: 132px;
+  height: 132px;
+  left: min(23%, 296px);
+  top: 6%;
+  animation-duration: 29s;
+  animation-delay: -9s;
+}
+.orb-6 {
+  width: 126px;
+  height: 126px;
+  left: 3%;
+  top: 47%;
+  animation-duration: 52s;
+  animation-delay: -30s;
+}
+
+@keyframes orb-drift {
+  from {
+    transform: translate3d(-3%, 2%, 0) scale(0.94);
+    opacity: 0.4;
+  }
+  to {
+    transform: translate3d(4%, -5%, 0) scale(1.12);
+    opacity: 0.8;
+  }
+}
+
+/* Stacked layout: the same rule, re-derived, because the geometry inverts.
+   Above 900px the terminal is a column down the LEFT, so "left of the terminal's
+   right edge" keeps an orb out of the graph. Below 900px #workspace turns into a
+   column with the graph on TOP and the terminal underneath, so those same left
+   offsets put five of the six orbs straight through the commit graph - measured
+   at 320/360/390/414/768/900, overlaps up to 33 403 px^2, orb-4 more than half
+   inside the box. The band moves with the layout: on a stacked screen the only
+   ground that is never the graph's is the strip below it, so the orbs go there
+   and shrink to match a phone (a 197px sphere is half of a 390px viewport).
+   85%+ is measured, not guessed: the graph's bottom edge peaks at 76.7% of the
+   viewport (768x900, minimum-height terminal), and the drift keyframe can lift
+   an orb by 5% of its own size and grow it 12%, which at these sizes is 9px. */
+@media (max-width: 900px) {
+  .orb {
+    animation-name: orb-drift-low;
+  }
+
+  .orb-1 {
+    width: 76px;
+    height: 76px;
+    left: 4%;
+    top: 87%;
+  }
+  .orb-2 {
+    width: 64px;
+    height: 64px;
+    left: 27%;
+    top: 90%;
+  }
+  .orb-3 {
+    width: 52px;
+    height: 52px;
+    left: 46%;
+    top: 86%;
+  }
+  .orb-4 {
+    width: 70px;
+    height: 70px;
+    left: 61%;
+    top: 89%;
+  }
+  .orb-5 {
+    width: 44px;
+    height: 44px;
+    left: 80%;
+    top: 85%;
+  }
+  .orb-6 {
+    width: 58px;
+    height: 58px;
+    left: 88%;
+    top: 91%;
+  }
+
+  /* Drifts sideways rather than upward, so nothing walks back into the box. */
+  @keyframes orb-drift-low {
+    from {
+      transform: translate3d(-4%, 1%, 0) scale(0.94);
+      opacity: 0.35;
+    }
+    to {
+      transform: translate3d(5%, 3%, 0) scale(1.1);
+      opacity: 0.7;
+    }
+  }
+}
+
+/* -- rising bubbles -------------------------------------------------------- */
+.bubble {
+  position: absolute;
+  bottom: -14vh;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 33% 25%, var(--bubble-spec) 0%, var(--bubble-spec) 5%, transparent 20%),
+    radial-gradient(circle at 68% 76%, var(--bubble-rim) 0%, transparent 15%),
+    radial-gradient(circle at 50% 50%, transparent 46%, var(--bubble-fill) 74%, transparent 100%);
+  box-shadow:
+    inset 0 0 0 1.25px var(--bubble-rim),
+    0 0 10px var(--bubble-fill);
+  opacity: 0;
+  animation: bubble-rise linear infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes bubble-rise {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.8);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.72;
+  }
+  50% {
+    transform: translate3d(18px, -58vh, 0) scale(1);
+  }
+  88% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate3d(-12px, -122vh, 0) scale(1.14);
+    opacity: 0;
+  }
+}
+
+.b1  { left:  3%; width: 14px; height: 14px; animation-duration: 26s; animation-delay:  -2s; }
+.b2  { left: 11%; width: 26px; height: 26px; animation-duration: 34s; animation-delay: -11s; }
+.b3  { left: 19%; width: 10px; height: 10px; animation-duration: 21s; animation-delay:  -6s; }
+.b4  { left: 28%; width: 34px; height: 34px; animation-duration: 43s; animation-delay: -19s; }
+.b5  { left: 36%; width: 17px; height: 17px; animation-duration: 29s; animation-delay:  -1s; }
+.b6  { left: 45%; width: 12px; height: 12px; animation-duration: 24s; animation-delay: -15s; }
+.b7  { left: 53%; width: 29px; height: 29px; animation-duration: 38s; animation-delay:  -8s; }
+.b8  { left: 61%; width: 15px; height: 15px; animation-duration: 27s; animation-delay: -23s; }
+.b9  { left: 69%; width: 22px; height: 22px; animation-duration: 32s; animation-delay:  -4s; }
+.b10 { left: 77%; width: 11px; height: 11px; animation-duration: 22s; animation-delay: -17s; }
+.b11 { left: 86%; width: 31px; height: 31px; animation-duration: 45s; animation-delay: -28s; }
+.b12 { left: 94%; width: 18px; height: 18px; animation-duration: 31s; animation-delay: -13s; }
+
+/* -- reading scrim + vignette --------------------------------------------- */
+/* Deliberately faint. The panels carry their own contrast; the background is
+   here to be looked at. */
+.aero-scrim {
+  background: radial-gradient(120% 78% at 50% 54%, var(--scrim) 0%, transparent 76%);
+}
+
+.aero-vignette {
+  background: radial-gradient(132% 112% at 50% 38%, transparent 42%, var(--bg-vignette) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #aero-bg .aero-layer,
+  #aero-bg .orb,
+  #aero-bg .bubble {
+    animation: none !important;
+  }
+
+  #aero-bg .bubble {
+    opacity: 0.55;
+    transform: translate3d(0, -50vh, 0);
+  }
+
+  #aero-bg .orb {
+    opacity: 0.55;
+  }
+}
+
+/* ==========================================================================
+   3. Buttons - pressable glass capsules
+   ========================================================================== */
+
+.btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 34px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--btn-rim-outer);
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  color: var(--btn-text);
+  background-color: var(--btn-face-2);
+  background-image: linear-gradient(
+    180deg,
+    var(--btn-face-1) 0%,
+    var(--btn-face-1) 48%,
+    var(--btn-face-2) 52%,
+    var(--btn-face-2) 100%
+  );
+  backdrop-filter: blur(12px) saturate(170%);
+  -webkit-backdrop-filter: blur(12px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    inset 0 -1px 0 var(--rim-bottom),
+    inset 0 -9px 14px -11px var(--btn-inner-shadow),
+    var(--shadow-1);
+  transition:
+    transform var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out),
+    filter var(--dur-2) var(--ease-out),
+    color var(--dur-1) linear;
+}
+
+/* The gloss band: bright at the top, cut off with a soft lens curve just
+   above the middle. This is the shape that reads as "Aero". */
+.btn::before {
+  content: '';
+  position: absolute;
+  inset: 1px 1px auto;
+  height: 52%;
+  z-index: -1;
+  border-radius: var(--radius-pill) var(--radius-pill) 46% 46% / var(--radius-pill) var(--radius-pill) 120% 120%;
+  background: linear-gradient(
+    180deg,
+    var(--btn-gloss) 0%,
+    color-mix(in srgb, var(--btn-gloss) 55%, transparent) 62%,
+    color-mix(in srgb, var(--btn-gloss) 12%, transparent) 100%
+  );
+  pointer-events: none;
+}
+
+/* Light sweep on hover: a specular glint travelling across the gloss band.
+   It is clipped to the top 30% and faded out vertically, which puts it entirely
+   above the cap height of the label at every button size - so a bright sweep
+   over light-on-dark ink (dusk, .btn-danger) can never eat contrast. */
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 1px 1px auto;
+  height: 30%;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(104deg, transparent 32%, var(--btn-sweep) 50%, transparent 68%);
+  -webkit-mask-image: linear-gradient(180deg, var(--mask-opaque) 0%, transparent 100%);
+  mask-image: linear-gradient(180deg, var(--mask-opaque) 0%, transparent 100%);
+  transform: translate3d(-160%, 0, 0);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 700ms var(--ease-out),
+    opacity 160ms linear;
+}
+
+/* .is-hover / .is-active / .is-focus mirror the interactive states so they can
+   be shown side by side in test/style-guide.html. */
+.btn:is(:hover, .is-hover):not([disabled]) {
+  transform: translateY(-1px);
+  background-image: linear-gradient(
+    180deg,
+    var(--btn-face-hover-1) 0%,
+    var(--btn-face-hover-1) 48%,
+    var(--btn-face-hover-2) 52%,
+    var(--btn-face-hover-2) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 var(--btn-rim),
+    inset 0 -1px 0 var(--rim-bottom),
+    inset 0 -9px 14px -11px var(--btn-inner-shadow),
+    var(--shadow-2),
+    var(--glow);
+}
+
+.btn:hover:not([disabled])::after {
+  transform: translate3d(130%, 0, 0);
+  opacity: 1;
+}
+
+.btn.is-hover:not([disabled])::after {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+}
+
+.btn:is(:active, .is-active):not([disabled]) {
+  transform: translateY(1px) scale(0.985);
+  box-shadow:
+    inset 0 3px 7px var(--btn-inner-shadow),
+    inset 0 1px 0 var(--btn-rim),
+    var(--shadow-1);
+  filter: brightness(0.96);
+  transition-duration: 40ms;
+}
+
+.btn:is(:active, .is-active):not([disabled])::before {
+  opacity: 0.4;
+}
+
+.btn.is-focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 3px var(--focus-ring-contrast),
+    0 0 0 6px var(--focus-ring-halo);
+}
+
+/* Disabled is exempt from 1.4.3, but "exempt" is not "unreadable": a reader
+   still has to be able to tell WHICH control is off. The state is carried by
+   the flattened face and the desaturation, so the label itself keeps enough
+   ink to be read (opacity 0.55 + saturate(0.3) put it at 1.5:1). */
+.btn[disabled],
+.btn[aria-disabled='true'] {
+  color: var(--btn-disabled-text);
+  filter: saturate(0.55);
+  opacity: 0.82;
+  box-shadow: inset 0 1px 0 var(--btn-rim);
+  transform: none;
+}
+
+.btn[disabled]::after,
+.btn[aria-disabled='true']::after {
+  display: none;
+}
+
+/* -- variants -------------------------------------------------------------- */
+
+.btn-primary {
+  --btn-gloss: var(--btn-primary-gloss);
+  color: var(--btn-primary-text);
+  border-color: var(--btn-primary-rim-outer);
+  background-color: var(--btn-primary-2);
+  background-image: linear-gradient(
+    180deg,
+    var(--btn-primary-1) 0%,
+    var(--btn-primary-1) 48%,
+    var(--btn-primary-2) 52%,
+    var(--btn-primary-2) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 var(--btn-primary-rim),
+    inset 0 -10px 16px -11px var(--btn-inner-shadow),
+    var(--shadow-2);
+}
+
+.btn-primary:is(:hover, .is-hover):not([disabled]) {
+  background-image: linear-gradient(
+    180deg,
+    var(--btn-primary-1-hover) 0%,
+    var(--btn-primary-1-hover) 48%,
+    var(--btn-primary-2-hover) 52%,
+    var(--btn-primary-2-hover) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 var(--btn-primary-rim),
+    var(--shadow-3),
+    var(--glow-strong);
+}
+
+.btn-danger {
+  --btn-gloss: var(--btn-danger-gloss);
+  color: var(--btn-danger-text);
+  border-color: var(--btn-danger-rim-outer);
+  background-color: var(--btn-danger-2);
+  background-image: linear-gradient(
+    180deg,
+    var(--btn-danger-1) 0%,
+    var(--btn-danger-1) 48%,
+    var(--btn-danger-2) 52%,
+    var(--btn-danger-2) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 var(--btn-danger-rim),
+    inset 0 -10px 16px -11px var(--btn-inner-shadow),
+    var(--shadow-2);
+}
+
+.btn-danger:is(:hover, .is-hover):not([disabled]) {
+  background-image: linear-gradient(
+    180deg,
+    var(--btn-danger-1-hover) 0%,
+    var(--btn-danger-1-hover) 48%,
+    var(--btn-danger-2-hover) 52%,
+    var(--btn-danger-2-hover) 100%
+  );
+}
+
+.btn-ghost {
+  color: var(--text);
+  border-color: transparent;
+  background-color: transparent;
+  background-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+.btn-ghost::before {
+  display: none;
+}
+
+.btn-ghost:is(:hover, .is-hover):not([disabled]) {
+  color: var(--text-strong);
+  border-color: var(--glass-border);
+  background-color: var(--btn-ghost-hover);
+  background-image: none;
+  box-shadow: var(--shadow-1);
+  filter: none;
+}
+
+.btn-ghost:is(:active, .is-active):not([disabled]) {
+  box-shadow: inset 0 2px 5px var(--btn-inner-shadow);
+}
+
+/* -- sizes ----------------------------------------------------------------- */
+
+.btn-sm {
+  min-height: 28px;
+  padding-inline: var(--space-2);
+  font-size: var(--fs-xs);
+  gap: var(--space-1);
+}
+
+.btn-lg {
+  min-height: 44px;
+  padding-inline: var(--space-5);
+  font-size: var(--fs-md);
+}
+
+.btn-icon {
+  width: 34px;
+  min-width: 34px;
+  padding-inline: 0;
+}
+
+.btn-icon.btn-sm {
+  width: 28px;
+  min-width: 28px;
+}
+
+.btn-icon.btn-lg {
+  width: 44px;
+  min-width: 44px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* -- icons ----------------------------------------------------------------- */
+
+.icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: inherit;
+  pointer-events: none;
+}
+
+.btn-sm .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-lg .icon {
+  width: 21px;
+  height: 21px;
+}
+
+.icon-lg {
+  width: 24px;
+  height: 24px;
+}
+
+/* State-driven glyph swaps. Pure CSS, so the icon is always truthful even
+   before main.js has finished booting. */
+html[data-theme='day'] .icon-when-dusk,
+html[data-theme='dusk'] .icon-when-day,
+[aria-pressed='true'] .icon-when-off,
+[aria-pressed='false'] .icon-when-on {
+  display: none;
+}
+
+/* ==========================================================================
+   4. Top bar
+   ========================================================================== */
+
+#topbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'brand titles actions';
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+  margin: var(--space-3) var(--space-3) 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border-strong);
+  background-color: var(--topbar-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow:
+    var(--shadow-2),
+    inset 0 1px 0 var(--rim-top),
+    inset 0 -1px 0 var(--rim-bottom),
+    inset 0 14px 26px -18px var(--rim-top);
+  isolation: isolate;
+}
+
+#topbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    var(--glass-highlight) 0%,
+    color-mix(in srgb, var(--glass-highlight) 42%, transparent) 34%,
+    transparent 56%
+  );
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+#brand {
+  grid-area: brand;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
+.brand-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 11px;
+  color: var(--btn-primary-text);
+  border: 1px solid var(--btn-primary-rim-outer);
+  background-image: linear-gradient(
+    180deg,
+    var(--btn-primary-1) 0%,
+    var(--btn-primary-1) 47%,
+    var(--btn-primary-2) 53%,
+    var(--btn-primary-2) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 var(--btn-primary-rim),
+    inset 0 -8px 12px -9px var(--btn-inner-shadow),
+    var(--shadow-1);
+  overflow: hidden;
+}
+
+.brand-mark::before {
+  content: '';
+  position: absolute;
+  inset: 1px 1px auto;
+  height: 50%;
+  border-radius: 10px 10px 44% 44% / 10px 10px 130% 130%;
+  background: linear-gradient(180deg, var(--btn-gloss) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.brand-mark .icon {
+  width: 18px;
+  height: 18px;
+  position: relative;
+}
+
+.brand-word {
+  display: inline-block;
+}
+
+/* -- title block: eyebrow above the level name, never a mid-word cut ------- */
+
+.topbar-titles {
+  grid-area: titles;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  /* The titles take the slack. The action rail gives up button labels long
+     before the title gives up a character - see the ladder at the bottom of
+     this file. */
+  flex: 1 1 auto;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--divider-line);
+}
+
+.title-stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  flex: 0 1 auto;
+  gap: 1px;
+  /* Two title lines are always reserved, so moving to a longer level name can
+     never change the height of the bar underneath the reader. */
+  min-height: calc(var(--fs-xs) * 1.3 + 2 * var(--fs-md) * 1.16 + 1px);
+}
+
+#level-title {
+  min-width: 0;
+  font-size: var(--fs-md);
+  font-weight: 650;
+  line-height: 1.16;
+  color: var(--text-strong);
+  letter-spacing: var(--tracking-tight);
+  /* Wraps, never truncates. The level name is the one string on screen the
+     reader actually needs whole, and "Untangling branch sp..." is not it. */
+  white-space: normal;
+  text-wrap: balance;
+  /* Deliberately NOT overflow-wrap: break-word. When the column got tight that
+     rendered "Making commits" as "Makin g commi ts"; a level name breaking
+     inside a word is worse than any amount of wrapping. The responsive ladder
+     below guarantees the column is wide enough for the longest word instead. */
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+/* The eyebrow is the sequence name: one line, never ellipsised, because half a
+   sequence name tells you nothing. */
+#level-title[data-sequence]:not([data-sequence=''])::before {
+  content: attr(data-sequence);
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+#level-progress {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--pill-border);
+  background-color: var(--pill-bg);
+  background-image: linear-gradient(180deg, var(--pill-gloss) 0%, transparent 54%);
+  box-shadow:
+    inset 0 1px 0 var(--rim-top),
+    inset 0 -1px 0 var(--rim-bottom),
+    var(--shadow-1);
+  color: var(--pill-text);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+#level-progress:empty {
+  display: none;
+}
+
+#topbar-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.btn-group + .btn-group {
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--divider-line);
+}
+
+/* ==========================================================================
+   5. Panels, the stage, wells, dividers
+   ========================================================================== */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The stage keeps the sky visible: only a light blur and a saturation lift,
+   no white wash. The commit graph draws its own opaque fills on top.
+   Radius matches .term in terminal.css so both panes read as one set. */
+.stage {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--glass-border-strong);
+  background-color: var(--stage-bg);
+  backdrop-filter: blur(2px) saturate(155%);
+  -webkit-backdrop-filter: blur(2px) saturate(155%);
+  box-shadow:
+    var(--shadow-3),
+    inset 0 1px 0 var(--rim-top),
+    inset 0 -1px 0 var(--rim-bottom),
+    inset 0 18px 34px -26px var(--rim-top);
+}
+
+/* Frosted title band. Composited on top of whatever surface it sits on, so it
+   is a reading surface on both the stage and a glass panel. */
+.panel-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--hairline);
+  /* Sentence case, to match the title the terminal draws in its own shell.
+     One casing rule for panel headers across the app. */
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text);
+  background-color: var(--head-bg);
+  background-image: linear-gradient(180deg, var(--rim-top) 0%, transparent 62%);
+  box-shadow: inset 0 -1px 0 var(--hairline-light);
+}
+
+.panel-head .icon {
+  width: 15px;
+  height: 15px;
+  color: var(--accent);
+}
+
+.panel-head-spacer {
+  flex: 1 1 auto;
+}
+
+.panel-head-hint {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.hint-coarse {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .hint-fine {
+    display: none;
+  }
+
+  .hint-coarse {
+    display: inline;
+  }
+}
+
+/* On a mouse the hint is a nicety and the header is worth more at tablet width.
+   On a finger it is not: the graph shrinks commit ids instead of clipping the
+   history, so pinch is how a reader gets an id back, and that is precisely the
+   width where the hint used to disappear. Kept for coarse pointers at every
+   width; the ellipsis on .panel-head-hint handles the narrowest cases. */
+@media (max-width: 720px) and (pointer: fine) {
+  .panel-head-hint {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) and (pointer: none) {
+  .panel-head-hint {
+    display: none;
+  }
+}
+
+.panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-3);
+}
+
+#terminal-pane,
+#canvas-pane {
+  border-radius: var(--radius-xl);
+}
+
+.divider {
+  height: 1px;
+  border: 0;
+  margin: var(--space-4) 0;
+  background: linear-gradient(90deg, transparent, var(--divider-line) 12%, var(--divider-line) 88%, transparent);
+  box-shadow: 0 1px 0 var(--hairline-light);
+}
+
+.divider-v {
+  width: 1px;
+  height: auto;
+  align-self: stretch;
+  margin: 0 var(--space-2);
+  background: linear-gradient(180deg, transparent, var(--divider-line) 15%, var(--divider-line) 85%, transparent);
+}
+
+/* -- resize handle --------------------------------------------------------- */
+
+#pane-divider {
+  flex: none;
+  position: relative;
+  width: 14px;
+  align-self: stretch;
+  cursor: col-resize;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  transition: background-color var(--dur-2) var(--ease-out);
+  touch-action: none;
+}
+
+#pane-divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 46px;
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-pill);
+  background: var(--divider-grip);
+  box-shadow: inset 0 1px 0 var(--rim-top);
+  opacity: 0.6;
+  transition:
+    opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-2) var(--ease-out);
+}
+
+#pane-divider:hover::before,
+#pane-divider:focus-visible::before {
+  opacity: 1;
+  transform: translate(-50%, -50%) scaleY(1.5);
+}
+
+#pane-divider:hover,
+#pane-divider:focus-visible {
+  background-color: var(--btn-ghost-hover);
+}
+
+/* ==========================================================================
+   6. Canvas pane furniture
+   ========================================================================== */
+
+/* A scrim painted inside the stage, under the tree layer only. The water still
+   reads through it - it is a soft pool of deeper colour, not a wash - but it
+   compresses the backdrop's dynamic range enough that a bokeh sphere or a
+   bubble drifting past can never pull the contrast out from under a commit
+   bead. The graph is the hero; nothing decorative gets to compete with it. */
+.canvas-stage::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    128% 108% at 50% 46%,
+    var(--stage-scrim) 0%,
+    var(--stage-scrim) 74%,
+    transparent 100%
+  );
+}
+
+/* Above the scrim, and above anything the background can throw at it. */
+#tree-host {
+  z-index: 1;
+}
+
+/* The goal is a docked companion, never an overlay: comparing your board with
+   the target is the most common thing a reader does, so the target must not
+   cover the thing it is being compared with. main.js adds .has-goal to
+   #canvas-pane while it is open; the docked layout is the default either way. */
+#canvas-pane.has-goal .canvas-stage {
+  flex-direction: row;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+#goal-panel {
+  position: relative;
+  z-index: 3;
+  flex: 0 0 clamp(240px, 32%, 420px);
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  /* Recessed, so the eye reads it as a reference plate and the clear stage
+     next to it as the live board. */
+  border-color: var(--origin-border);
+  box-shadow:
+    inset 0 2px 8px var(--glass-shadow),
+    inset 0 -1px 0 var(--rim-top);
+  animation: goal-in var(--dur-3) var(--ease-spring) both;
+}
+
+@keyframes goal-in {
+  from {
+    opacity: 0;
+    transform: translate3d(12px, 0, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.goal-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--origin-border);
+  background: var(--info-tint);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-strong);
+}
+
+.goal-head .icon {
+  width: 15px;
+  height: 15px;
+  color: var(--accent);
+}
+
+.goal-head-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+#goal-close {
+  margin-left: auto;
+}
+
+/* The caption carries the grading rule - the only place the reader is told what
+   actually counts as solved - so it is the one thing here that must never be
+   squeezed or covered. flex:none holds it at full height at every width and
+   #goal-host absorbs the whole shortfall by scrolling. It closes the panel the
+   way .goal-head opens it: same tint, same hairline, so the tree reads as a
+   plate between two bands rather than as text that ran into a picture. */
+.goal-grading {
+  flex: none;
+  margin: 0;
+  /* Deeper at the bottom than the top: the panel edge and its border land right
+     under the last line, and text that stops one pixel short of a frame reads as
+     text that got cut off. */
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border-top: 1px solid var(--origin-border);
+  background: var(--info-tint);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+  color: var(--text);
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+
+/* Stacked: the goal sits under the live board, still never on top of it. */
+@media (max-width: 900px) {
+  #canvas-pane.has-goal .canvas-stage {
+    flex-direction: column;
+  }
+
+  /* The goal takes its slice OUT of the graph pane; it never adds height to it.
+     A 460px floor on the pane used to make room by growing, and #workspace
+     scrolls here, so the growth went somewhere the reader could not see it:
+     measured at 360x760, opening the goal put the command prompt 16px past the
+     bottom of a viewport with no scrollbar to say so. Nothing below this line
+     may make the stack taller than the screen.
+
+     The slice is `50% + 55px`, capped. The 55px is half the panel's own chrome
+     - head plus grading caption, measured at 91px on a phone - so the two trees
+     end up the same height rather than the goal's tree paying for the caption
+     out of its own box; measured at 360 that is 101px each. The 240px cap stops
+     goal from eating a tall tablet stage it does not need. A flat 44% is what
+     put the tree in a 59px box and spilled it onto the caption, and a flat
+     240px starved the live board on a phone. Whatever is left after the head
+     and the caption is the mini tree's, and it scrolls if that is short -
+     it is the one thing in this panel allowed to give. */
+  /* Both boxes take a definite basis so the split is arithmetic and not a
+     negotiation: #tree-host defaults to an auto basis, which reports the live
+     tree's own 120px floor, and the line then overflowed and shrank both
+     panels by a ratio nobody chose - 15px added to the goal moved the border
+     by 5. */
+  #canvas-pane.has-goal #tree-host {
+    flex: 1 1 0;
+  }
+
+  #goal-panel {
+    flex: 0 0 min(240px, calc(50% + 49px));
+  }
+
+  /* An even split is the fair answer, not the right one at the bottom of the
+     range: both trees have a floor of their own - 120px for the live board,
+     100px for a compact one - and at 360px an even split lands both on 101 and
+     slices the live board. 206px is the compact floor plus this panel's own
+     chrome, measured, so the goal takes exactly what it needs and the live
+     board keeps the remainder, which clears 120. The 20px comes off the
+     terminal, which is the only pane here that loses nothing but a line of
+     scrollback: its key strip and prompt both sit inside 170px. */
+  @media (max-width: 560px) {
+    #goal-panel {
+      flex: 0 0 min(206px, calc(50% + 49px));
+    }
+
+    #workspace:has(#canvas-pane.has-goal) #terminal-pane {
+      min-height: 170px;
+    }
+  }
+
+  /* The graph pane asks for exactly what the two trees need - pane head 34,
+     stage padding 16, the live tree's 120 floor, the 8px gap and the goal's
+     206 - instead of a share of what is going. A ratio cannot do this: 4:2
+     landed the live tree on 105 and its root commit was sliced by the goal's
+     top edge.
+     Only where the height exists to pay for it. Under 700px the proportional
+     split comes back, because the alternative is pushing the command prompt
+     off the bottom of a phone, and a squeezed tree the reader can scroll beats
+     a prompt the reader cannot find. */
+  @media (max-width: 560px) and (min-height: 700px) {
+    #workspace:has(#canvas-pane.has-goal) #canvas-pane {
+      flex: 0 0 384px;
+    }
+  }
+
+  /* The goal is worth a bigger share of the split than the scrollback is. */
+  #canvas-pane.has-goal {
+    flex: 4 1 0;
+  }
+
+  .goal-head-sub {
+    display: none;
+  }
+}
+
+#command-hint {
+  position: absolute;
+  z-index: 2;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  max-width: calc(100% - var(--space-6));
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--glass-border-strong);
+  background-color: var(--glass-bg-strong);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  box-shadow:
+    var(--shadow-2),
+    inset 0 1px 0 var(--rim-top);
+  font-size: var(--fs-xs);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#command-hint:empty {
+  display: none;
+}
+
+/* ==========================================================================
+   7. Pills, badges, keys, tooltips
+   ========================================================================== */
+
+/* Same glass language as a button, one size down: gloss band on top, specular
+   rim above, reflected rim below. A flat white lozenge next to a glass capsule
+   reads as an unfinished component. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--pill-border);
+  background-color: var(--pill-bg);
+  background-image: linear-gradient(180deg, var(--pill-gloss) 0%, transparent 54%);
+  box-shadow:
+    inset 0 1px 0 var(--rim-top),
+    inset 0 -1px 0 var(--rim-bottom),
+    var(--shadow-1);
+  color: var(--pill-text);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.pill .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.pill-ok {
+  color: var(--ok);
+  background: var(--ok-tint);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+}
+
+.pill-warn {
+  color: var(--warn);
+  background: var(--warn-tint);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+}
+
+.pill-danger {
+  color: var(--danger);
+  background: var(--danger-tint);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+.pill-info {
+  color: var(--info);
+  background: var(--info-tint);
+  border-color: color-mix(in srgb, var(--info) 40%, transparent);
+}
+
+.kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--btn-rim-outer);
+  border-bottom-width: 2px;
+  background-image: linear-gradient(180deg, var(--btn-face-1), var(--btn-face-2));
+  box-shadow: inset 0 1px 0 var(--btn-rim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--btn-text);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+/* -- CSS-only tooltip ------------------------------------------------------ */
+
+/* .tip is a WRAPPER, never the control itself. The bubble hangs 8px below the
+   bottom edge, i.e. entirely outside the control's own box, so any control
+   that clips itself - every .btn does, to hold its gloss and light sweep
+   inside the capsule - would clip the bubble away. Putting the bubble on the
+   wrapper also keeps it off .btn::after, which is already the light sweep and
+   would otherwise merge with it into one broken pseudo-element.
+   The bubble is decoration: it cannot reach the accessibility tree, so the
+   control still needs a real aria-describedby target. */
+.tip {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translate(-50%, -4px) scale(0.96);
+  transform-origin: top center;
+  width: max-content;
+  max-width: min(240px, 60vw);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.4;
+  text-transform: none;
+  white-space: normal;
+  text-align: center;
+  box-shadow: var(--shadow-2);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--dur-1) var(--ease-out),
+    transform var(--dur-2) var(--ease-out);
+}
+
+/* :has, not :focus-within - a bubble must answer keyboard focus, not the focus
+   a mouse press leaves behind. .is-tip mirrors the open state for the style
+   guide and for screenshots. */
+.tip:hover::after,
+.tip:has(:focus-visible)::after,
+.tip.is-tip::after {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+  transition-delay: 260ms;
+}
+
+/* Anchored variants, so a bubble under an edge control cannot run off the
+   viewport - #app clips, and a half-drawn tooltip is no tooltip. */
+.tip-start::after {
+  left: 0;
+  transform: translate(0, -4px) scale(0.96);
+  transform-origin: top left;
+  text-align: left;
+}
+
+.tip-end::after {
+  left: auto;
+  right: 0;
+  transform: translate(0, -4px) scale(0.96);
+  transform-origin: top right;
+}
+
+.tip-start:hover::after,
+.tip-start:has(:focus-visible)::after,
+.tip-start.is-tip::after,
+.tip-end:hover::after,
+.tip-end:has(:focus-visible)::after,
+.tip-end.is-tip::after {
+  transform: translate(0, 0) scale(1);
+}
+
+.tip-up::after {
+  top: auto;
+  bottom: calc(100% + 8px);
+  transform-origin: bottom center;
+}
+
+/* Below 1000px the class-based anchors above are simply wrong, and silently:
+   .tip-start and .tip-end are put on the controls that sit at the ENDS of the
+   rail, which stops being true the moment the rail moves to its own row and
+   again when it becomes a centred 5-column grid. Measured at 320px, Help
+   carried .tip-end while sitting in column two, so its bubble ran 86px off the
+   left edge and #app - which clips with no scrollbar - ate the first half of
+   the sentence: "nd ... ortcuts (?)".
+   Position in the DOM is the only thing that survives both layouts, and it is
+   fixed: ten controls in three groups, in this order. So the rules below
+   anchor by that position instead of by a class, once per layout.
+   Anything added to #topbar-actions has to be counted back into both maps. */
+@media (max-width: 1000px) {
+  #topbar-actions .tip::after {
+    max-width: min(240px, calc(100vw - var(--space-6)));
+  }
+}
+
+/* Grid band: five columns, so the anchor follows the column. Columns 1-2 open
+   to the right, column 3 is centred, columns 4-5 open to the left.
+     row 1  Levels Objective Hint Solution Undo
+     row 2  Reset Help Theme Sound Fullscreen */
+@media (max-width: 560px) {
+  #topbar-actions .btn-group[data-group='lesson'] .tip:nth-child(-n + 2)::after,
+  #topbar-actions .btn-group[data-group='repo'] .tip:nth-child(2)::after,
+  #topbar-actions .btn-group[data-group='utility'] .tip:nth-child(1)::after {
+    left: 0;
+    right: auto;
+    transform: translate(0, -4px) scale(0.96);
+    transform-origin: top left;
+    text-align: left;
+  }
+
+  #topbar-actions .btn-group[data-group='lesson'] .tip:nth-child(3)::after,
+  #topbar-actions .btn-group[data-group='utility'] .tip:nth-child(2)::after {
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -4px) scale(0.96);
+    transform-origin: top center;
+    text-align: center;
+  }
+
+  #topbar-actions .btn-group[data-group='lesson'] .tip:nth-child(4)::after,
+  #topbar-actions .btn-group[data-group='repo'] .tip:nth-child(1)::after,
+  #topbar-actions .btn-group[data-group='utility'] .tip:nth-child(n + 3)::after {
+    left: auto;
+    right: 0;
+    transform: translate(0, -4px) scale(0.96);
+    transform-origin: top right;
+    text-align: left;
+  }
+
+  #topbar-actions .btn-group[data-group='lesson'] .tip:nth-child(3):hover::after,
+  #topbar-actions .btn-group[data-group='lesson'] .tip:nth-child(3):has(:focus-visible)::after,
+  #topbar-actions .btn-group[data-group='lesson'] .tip:nth-child(3).is-tip::after,
+  #topbar-actions .btn-group[data-group='utility'] .tip:nth-child(2):hover::after,
+  #topbar-actions .btn-group[data-group='utility'] .tip:nth-child(2):has(:focus-visible)::after,
+  #topbar-actions .btn-group[data-group='utility'] .tip:nth-child(2).is-tip::after {
+    transform: translate(-50%, 0) scale(1);
+  }
+
+  #topbar-actions .tip:hover::after,
+  #topbar-actions .tip:has(:focus-visible)::after,
+  #topbar-actions .tip.is-tip::after {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+/* Row band: one left-aligned row, so the first half opens right and the second
+   half opens left. The rail is flush left here, never centred. */
+@media (min-width: 561px) and (max-width: 1000px) {
+  #topbar-actions .btn-group[data-group='lesson'] .tip::after,
+  #topbar-actions .btn-group[data-group='repo'] .tip:nth-child(1)::after {
+    left: 0;
+    right: auto;
+    transform: translate(0, -4px) scale(0.96);
+    transform-origin: top left;
+    text-align: left;
+  }
+
+  #topbar-actions .btn-group[data-group='repo'] .tip:nth-child(2)::after,
+  #topbar-actions .btn-group[data-group='utility'] .tip::after {
+    left: auto;
+    right: 0;
+    transform: translate(0, -4px) scale(0.96);
+    transform-origin: top right;
+    text-align: left;
+  }
+
+  #topbar-actions .tip:hover::after,
+  #topbar-actions .tip:has(:focus-visible)::after,
+  #topbar-actions .tip.is-tip::after {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+/* ==========================================================================
+   8. Overlays: toasts, modal root, boot error, skip link, noscript
+   ========================================================================== */
+
+#toast-root {
+  position: fixed;
+  z-index: 70;
+  left: 50%;
+  bottom: var(--space-5);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: var(--space-2);
+  width: min(420px, calc(100vw - var(--space-6)));
+  pointer-events: none;
+}
+
+#toast-root > * {
+  pointer-events: auto;
+}
+
+#toast-root:empty {
+  display: none;
+}
+
+#modal-root {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  pointer-events: none;
+}
+
+#modal-root > * {
+  pointer-events: auto;
+}
+
+#modal-root:empty {
+  display: none;
+}
+
+.boot-error {
+  position: fixed;
+  z-index: 90;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(440px, calc(100vw - var(--space-6)));
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  background-color: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow:
+    var(--shadow-4),
+    inset 0 1px 0 var(--rim-top);
+  color: var(--text-strong);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  text-align: center;
+}
+
+.boot-error::before {
+  content: '';
+  display: block;
+  width: 46px;
+  height: 4px;
+  margin: 0 auto var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--danger);
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: var(--space-2);
+  left: 50%;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--glass-border-strong);
+  background-color: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--shadow-3);
+  color: var(--text-strong);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  text-decoration: none;
+  transform: translate(-50%, -180%);
+  transition: transform var(--dur-2) var(--ease-spring);
+}
+
+.skip-link:focus-visible {
+  transform: translate(-50%, 0);
+}
+
+.noscript-note {
+  margin: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border-strong);
+  background-color: var(--glass-bg-strong);
+  color: var(--text-strong);
+  font-size: var(--fs-md);
+  box-shadow: var(--shadow-2);
+}
+
+/* ==========================================================================
+   9. Fallback module chrome (main.js stubs, shown only while a module is
+      missing). Styled so a half-built app still looks deliberate.
+   ========================================================================== */
+
+.stub-log {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.stub-input {
+  flex: none;
+  margin: var(--space-2) var(--space-3) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--hairline);
+  background: var(--well-bg);
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+.stub-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* The stub terminal appends its log + input straight into the host. */
+#terminal-host {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   10. Responsive top bar
+   ========================================================================== */
+
+/* One rung, not three. The rail used to shed labels group by group, which put
+   three different toolbar grammars on screen between 1180 and 1560: at 1280
+   Undo and Reset were bare glyphs sitting next to a labelled Solution and a
+   bare Help, so they read as part of the settings cluster they are not in.
+   Every action group now drops its label at the same width, so the rail is
+   either all words or all glyphs and never a mix.
+     <= 1779  every action label goes; the rail is all glyphs
+     <= 1000  the rail moves to its own row
+
+   1779 and not 1560 because of what a labelled rail then has to be. Ten pills
+   each sized to its own word came out in nine different widths, 77px to 111px,
+   so one rail carried nine sizes of the same control. A uniform pill fixes
+   that and costs 200px, and at 1560 the only column with 200px to give is the
+   heading. Labels now wait until the width exists to hold all ten at one size
+   without taking a pixel from the title.
+
+   :where() zeroes these selectors' specificity on purpose. The touch-target
+   rule at the bottom of this file is a plain `#topbar-actions .btn`, and a
+   collapse rung written as `#topbar-actions .btn-group[data-group=...] .btn`
+   outranked it 4 classes to 1 - which is how six top-bar controls stayed
+   34px wide under a coarse pointer while their min-height obeyed the 44px
+   rule. Any future rung must stay inside :where() for the same reason. */
+@media (max-width: 1779px) {
+  #topbar-actions .btn-label {
+    display: none;
+  }
+
+  #topbar-actions :where(.btn) {
+    width: 34px;
+    min-width: 34px;
+    padding-inline: 0;
+  }
+}
+
+/* One pill width for all ten, set by the longest word on the rail. */
+@media (min-width: 1780px) {
+  #topbar-actions .btn {
+    min-width: 112px;
+    justify-content: center;
+  }
+}
+
+/* Two rows: identity on top, the full action rail underneath. This is the last
+   rung and it fires at 1000px, not 760px - measured, the single-row layout
+   leaves the heading 52px at 768px and wraps "Rewriting a commit that is buried
+   in the middle" onto eight lines. Ten icon buttons plus a wordmark plus a
+   heading do not fit on one line at tablet width, and the heading is the part
+   that must not be the one to give. */
+@media (max-width: 1000px) {
+  #topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'brand titles'
+      'actions actions';
+    row-gap: var(--space-2);
+  }
+
+  #topbar-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  #workspace {
+    padding: var(--space-2);
+  }
+
+  #topbar {
+    margin: var(--space-2) var(--space-2) 0;
+    padding: var(--space-2);
+    gap: var(--space-2);
+  }
+
+  .topbar-titles {
+    gap: var(--space-2);
+  }
+
+  /* No eyebrow at this width, so no reserved eyebrow row - but the reserve
+     itself still has to exist. Setting it to 0 was the same bug the desktop
+     ladder already fixed, just moved down the ladder: measured across 320-560
+     the longest level name ("Rescuing one commit from a branch nobody will
+     merge") takes three lines at 320 and at 440, two everywhere else, so the
+     box flipped 30px <-> 45px and the whole workspace stepped up and down as
+     the reader moved between levels. Three lines is the measured worst case in
+     this band, so three lines is what gets reserved. */
+  .title-stack {
+    min-height: calc(3 * var(--fs-sm) * 1.16);
+  }
+
+  #level-title {
+    font-size: var(--fs-sm);
+  }
+
+  #level-title[data-sequence]:not([data-sequence=''])::before {
+    content: none;
+  }
+}
+
+/* Wrapped rail: even rows, no group dividers stranded in the middle of one.
+   The groups still exist for screen readers, they just stop drawing a rule.
+
+   Five columns, explicitly. Flex wrapping cannot produce even rows here: the
+   groups are four, two and four buttons and a group is one flex item, so the
+   line always broke 4+2 then 4 - a six-and-a-four that read as two unrelated
+   toolbars. display:contents lets the ten buttons meet the grid directly while
+   the groups keep their role and label for a screen reader, and the grid then
+   makes the rows 5 and 5 at every width in this band.
+
+   560 and not 480: under a coarse pointer the ten 44px targets need 500px and
+   the bar only has 433 at 481, so a phone in that band wrapped its flex rail
+   into ragged rows again - and the tooltip anchoring below is written against
+   exactly these two layouts, so the band where each one applies has to be the
+   band where it is actually true. */
+@media (max-width: 560px) {
+  #topbar-actions {
+    display: grid;
+    grid-template-columns: repeat(5, auto);
+    justify-content: center;
+    gap: var(--space-1);
+  }
+
+  .btn-group {
+    display: contents;
+  }
+
+  .btn-group + .btn-group {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .brand-word {
+    display: none;
+  }
+
+  .topbar-titles {
+    padding-left: var(--space-2);
+  }
+
+  /* :where() again: a fine pointer at 400px gets a 32px rail, a finger never
+     does, whichever rule the cascade reads last. */
+  #topbar-actions :where(.btn) {
+    width: 32px;
+    min-width: 32px;
+    min-height: 32px;
+  }
+}
+
+/* Touch. Pointer size, not viewport width: a 360px desktop window does not
+   need 44px targets, a phone does at any width. WCAG 2.2 SC 2.5.8 wants 44x44,
+   both axes - the rail rule below sets both, and every rung above it is inside
+   :where() so nothing can outrank it on one axis and leave the other. */
+@media (pointer: coarse) {
+  .btn {
+    min-height: 44px;
+  }
+
+  .btn-sm {
+    min-height: 38px;
+  }
+
+  .btn-icon {
+    width: 44px;
+    min-width: 44px;
+  }
+
+  .btn-icon.btn-sm {
+    width: 38px;
+    min-width: 38px;
+  }
+
+  #topbar-actions .btn,
+  #topbar-actions .btn-icon {
+    width: auto;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  #pane-divider {
+    width: 22px;
+  }
+}
+
+/* Short viewports: give the workspace every pixel it can get. */
+@media (max-height: 620px) and (min-width: 761px) {
+  #topbar {
+    padding-block: var(--space-1);
+    margin-bottom: 0;
+  }
+
+  #workspace {
+    padding-top: var(--space-2);
+  }
+}
+
+/* Very wide screens: stop the reading column from stretching forever. */
+@media (min-width: 2000px) {
+  #topbar,
+  #workspace {
+    width: min(2400px, calc(100% - var(--space-6)));
+    margin-inline: auto;
+  }
+
+  #topbar {
+    margin-top: var(--space-4);
+  }
+}
