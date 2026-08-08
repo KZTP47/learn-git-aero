@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel an in-flight run when new commits land on the same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit and integrity tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # No dependencies to install: the app and the suite use only Node builtins.
+      - name: Run the test suite
+        run: node --test
+
+  smoke:
+    name: Browser smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ubuntu-latest ships Chrome. The harness drives it over the DevTools
+      # protocol using Node's built-in fetch and WebSocket, so there is nothing
+      # to install here either.
+      - name: Serve the app
+        run: |
+          python3 -m http.server 8099 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8099/index.html >/dev/null && break
+            sleep 1
+          done
+
+      - name: Boot the app and run git commands
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: |
+          node tools/shot.mjs \
+            --url http://localhost:8099/ \
+            --out artifacts/smoke.png \
+            --width 1440 --height 900 --dpr 1 \
+            --wait-fn "document.documentElement.classList.contains('is-ready')" \
+            --eval "document.querySelector('#modal-root .modal-x')?.click()" \
+            --eval "new Promise(r=>setTimeout(r,800))" \
+            --eval "(() => { window.__lga.runCommand('git checkout -b feature; git commit; git commit; git checkout main; git commit; git merge feature; git tag v1'); return 'ran'; })()" \
+            --eval "new Promise(r=>setTimeout(r,4000))" \
+            --eval "(() => { const s = window.__lga.state; const drawn = document.querySelectorAll('#tree-host .tv-node').length; const engine = Object.keys(s.engine.getSnapshot().commits).length; if (drawn !== engine) throw new Error('graph and engine disagree: ' + drawn + ' vs ' + engine); if (s.sequences.reduce((n,q)=>n+q.levels.length,0) < 30) throw new Error('levels failed to load'); return 'ok'; })()"
+
+      # The harness exits non-zero on a step failure, and its JSON report lists
+      # every console error, page exception and failed request. Fail the job if
+      # any appeared, so a silent runtime error cannot pass as green.
+      - name: Assert a clean console
+        run: |
+          node -e "
+            const r = require('./artifacts/smoke.png.json');
+            const noise = [...r.consoleErrors, ...r.pageExceptions, ...r.failedRequests];
+            if (noise.length) { console.error(noise.join('\n')); process.exit(1); }
+            console.log('clean: no console errors, exceptions or failed requests');
+          "
+
+      - name: Upload the screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshot
+          path: artifacts/
+          retention-days: 7
